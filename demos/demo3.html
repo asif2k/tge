@@ -1,0 +1,134 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>   
+</head>
+<body>
+  <button style="position:absolute;right:2px;top:2px;z-index:111" id="optionsButton">Options</button>
+  <script src="../tge.js"></script>
+  <script src="../uic.js"></script>
+
+  <script>
+
+    tge.demo({}, function (app, engine, scene, camera) {
+      var light0 = scene.addLight(new tge.light(), function (lg) {
+       // lg.setPosition(0, 5, 0);
+        lg.setDiffuse(0.5, 0.5, 0.5);
+        lg.setAmbient(0.338, 0.338, 0.338).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
+        //lg.setRotation(-50 * tge.DEGTORAD, 0, 50 * tge.DEGTORAD);
+        
+       lg.setRotation(-180 * tge.DEGTORAD, 0, 0);
+        lg.castShadows = true;
+        scene.addModel(lg.getDisplay());
+
+      });
+
+      var light1 = scene.addLight(new tge.point_light({ attenuation: [1.0, 0.045, 0.0075]}), function (lg) {
+        lg.setPosition(0, 5, 0);
+        lg.setDiffuse(0.5, 0.5, 0.5);
+        lg.setAmbient(0.638, 0.638, 0.638).setSpecular(0.5, 0.5, 0.5).setIntensity(0.5);
+
+        //lg.setRotation(-50 * tge.DEGTORAD, 0, -50 * tge.DEGTORAD);
+        light0.parent = lg;
+       // lg.castShadows = true;
+      //  scene.addModel(lg.getDisplay());
+
+      });
+
+      tge.geometry.wavefront_obj_url("models/mon2.obj", function (geo) {
+        scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
+          md.setPosition(3, 0.5, 0);
+          mesh.material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
+        });
+      });
+
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 300, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+        md.setPosition(0, -0.5, 0);
+        mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 8, 8, 0);
+        mesh.material.normalMap = tge.texture.from_url('textures/nm3.jpg');
+        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW);
+        //mesh.material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+        md.setRotation(-90 * tge.DEGTORAD, 0, 0);
+      });
+
+      var test1 = true;
+      scene.createRandomModelsGrid(80, 10, function (md) {
+        if (test1) {
+          md.parent = light0;
+          md.setPosition(0, 0, 0);
+        }
+        else {
+          md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
+        }
+        test1 = false;
+        
+      }, tge.phong_material);
+
+
+      app.mouseDrage2 = (function (base) {
+        return function (dx, dy, e) {
+          if (!e.ctrlKey) return base.apply(this, arguments);
+          else light1.yawPitch(-dy * 0.005, -dx * 0.005);
+        }
+      })(app.mouseDrage2);
+
+
+      app.mouseWheel = (function (base) {
+        return function (sp, e) {
+          if (e.buttons === 2) light1.moveFrontBack(-0.005 * sp);
+          else base.apply(this, arguments);
+        }
+      })(app.mouseWheel);
+
+      camera.setPosition(-0.02603265456855297, 4.681277275085449, 11.607051849365234);
+
+
+      var ui$ = uic.create("uic-props").buildUI([{
+        props: [
+          { name: "bias", title: "Bias", input: "percent" },
+          { name: "opacity", title: "Opacity", input: "percent" },
+          
+        ]
+      }]);
+
+      var shadow_params = {
+        bias: 2, opacity: 30, update: function () {
+          light1.shadowBias = (this.bias / 100) * 0.2;
+          light1.shadowOpacity = this.opacity / 100;
+        }
+      };
+
+
+
+      ui$.runUI(shadow_params, light1).onUpdated = function () {
+        shadow_params.update();
+      };
+
+      ui$.classList.add("uic-popup-props");
+      document.getElementById("optionsButton").onclick = function () {
+        uic.popups$.show(ui$, this);
+      };
+
+
+      app.playLoop(function (delta, time) {
+
+        if (camera.update()) {
+          scene.renderList.meshes.sorted = false;
+        }
+        scene.updateRenderList(camera);
+
+        engine.setDefaultViewport().clearScreen();
+        engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
+
+
+      }, 16);
+
+    });
+
+
+  </script>
+
+</body>
+</html>

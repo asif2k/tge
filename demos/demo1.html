@@ -1,0 +1,74 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>   
+</head>
+<body>
+  <script  src="../tge.js"></script>
+
+  <script>
+
+    tge.demo({}, function (app, engine, scene, camera) {
+
+
+      var light1 = scene.addLight(new tge.light(), function (lg) {
+        lg.setPosition(0, 5, 0);
+        lg.setDiffuse(0.5, 0.5, 0.5);
+        lg.setAmbient(0.338, 0.338, 0.338).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
+        lg.setRotation(-50 * tge.DEGTORAD, 0, 0);
+        scene.addModel(lg.getDisplay());
+
+      });
+
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 100, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+        md.setPosition(0, -0.5, 0);
+        mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 8, 8, 0);
+        mesh.material.normalMap = tge.texture.from_url('textures/nm9.jpg');
+        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW);
+        //mesh.material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+        md.setRotation(-90 * tge.DEGTORAD, 0, 0);      
+      });
+
+      scene.addModel(new tge.model(tge.geometry.cube(), new tge.phong_material()), function (md, mesh) {
+        mesh.material.setAmbient(0.5, 1, 0.5);
+        mesh.material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
+      });
+      app.mouseDrage2 = (function (base) {
+        return function (dx, dy, e) {
+          if (!e.ctrlKey) return base.apply(this, arguments);
+          else light1.yawPitch(-dy * 0.005, -dx * 0.005);
+        }
+      })(app.mouseDrage2);
+
+
+      app.mouseWheel = (function (base) {
+        return function (sp, e) {
+          if (e.buttons === 2) light1.moveFrontBack(-0.005 * sp);
+          else base.apply(this, arguments);
+        }
+      })(app.mouseWheel);
+
+      camera.setPosition(-0.02603265456855297, 4.681277275085449, 11.607051849365234);
+
+      app.playLoop(function (delta, time) {
+        
+        if (camera.update()) {
+         scene.renderList.meshes.sorted = false;    
+        }
+        scene.updateRenderList(camera);
+
+        engine.setDefaultViewport().clearScreen();
+        engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
+
+
+      }, 16);
+
+    });
+
+
+  </script>
+
+</body>
+</html>
