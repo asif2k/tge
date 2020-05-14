@@ -19,19 +19,19 @@
         lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
         lg.shadowMapSize = 2048;
         lg.castShadows = true;
-        
+        lg.shadowCameraDistance = -15;
         scene.addModel(lg.getDisplay());
 
       });
 
-      var light1 = scene.addLight(new tge.spot_light({ attenuation: [1.0, 0.045, 0.0075]}), function (lg) {
+      var light1 = scene.addLight(new tge.spot_light({ attenuation: [2.0, 0.045, 0.0095]}), function (lg) {
         lg.setPosition(0, 5, 0);
         lg.setDiffuse(0.5, 0.5, 0.5);
-        lg.setAmbient(0.638, 0.638, 0.638).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
+        lg.setAmbient(0.638, 0.638, 0.638).setSpecular(0.5, 0.5, 0.5).setIntensity(2);
 
         lg.setRotation(-50 * tge.DEGTORAD, 0, -50 * tge.DEGTORAD);
        // light0.parent = lg;
-      //  lg.castShadows = true;
+        lg.castShadows = true;
         scene.addModel(lg.getDisplay());
 
       });
@@ -46,10 +46,10 @@
       scene.addModel(new tge.model(tge.geometry.plane({ size: 300, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
         md.setPosition(0, -0.5, 0);
         mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
-        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 8, 8, 0);
-        mesh.material.normalMap = tge.texture.from_url('textures/nm3.jpg');
-        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW);
-        //mesh.material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0,18, 18, 0);
+        mesh.material.normalMap = tge.texture.from_url('textures/nm10.jpg');
+        mesh.material.setAmbientRandom().setFlag(tge.SHADING.RECEIVE_SHADOW);
+      //  mesh.material.ambientTexture = tge.texture.from_url('textures/r5.jpg');
         md.setRotation(-90 * tge.DEGTORAD, 0, 0);
       });
 
@@ -61,7 +61,7 @@
       app.mouseDrage2 = (function (base) {
         return function (dx, dy, e) {
           if (!e.ctrlKey) return base.apply(this, arguments);
-          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
+          else light1.yawPitch(-dy * 0.005, -dx * 0.005);
         }
       })(app.mouseDrage2);
 
@@ -104,7 +104,7 @@
 
 
       app.playLoop(function (delta, time) {
-
+        if (light0.version < 10) light0.version++;
         if (camera.update()) {
           scene.renderList.meshes.sorted = false;
         }

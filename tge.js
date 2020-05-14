@@ -3918,7 +3918,7 @@ tge.parallax_material = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.shader = tge.parallax_material.shader;
-        this.dispMapScale = 0.3;
+        this.dispMapScale = 0.4;
         this.dispMapOffset = -1;
         $merge(options, this);
         return (this);
@@ -4324,9 +4324,9 @@ tge.light = $extend(function (proto, _super) {
         return function () {
             if (!this.camera) {
                 d = -this.shadowCameraDistance * 2;
-                // this.camera = new tge.ortho_camera(-25, 25, -25, 25, -50, 50);
-                this.camera = new tge.ortho_camera(-d, d, -d, d, -d * 0.5, d);
+                this.camera = new tge.ortho_camera(-d, d, -d, d, -d * 0.45, d);
                 this.camera.shadowLightVersion = -999;
+                this.camera.shadowCameraVersion = -999;
             }
             return this.camera;
         }
@@ -4395,7 +4395,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
                 else {
                     
                     tge.mat4.copy(light_camera.matrixWorld, this.matrixWorld);
-                    console.log("updateLightCameraMatrices", this.matrixWorld);
+                  //  console.log("updateLightCameraMatrices", this.matrixWorld);
                     
                 }
                 updateLightCameraMatrices = true;
@@ -4713,7 +4713,7 @@ tge.spot_light = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.viewAngle = 0
-        this.setAttenuation(1.0, 0.045, 0.0075);
+      //  this.setAttenuation(1.0, 0.045, 0.0075);
         this.setOuterAngle(options.outer || tge.DEGTORAD * 50).setInnerAngle(options.inner || tge.DEGTORAD * 50);
         this.lightType = 2;
         this.shadowMapSize =512;

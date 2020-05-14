@@ -222,7 +222,7 @@ tge.parallax_material = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.shader = tge.parallax_material.shader;
-        this.dispMapScale = 0.3;
+        this.dispMapScale = 0.4;
         this.dispMapOffset = -1;
         $merge(options, this);
         return (this);
