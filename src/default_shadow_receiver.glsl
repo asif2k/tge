@@ -20,7 +20,7 @@ float getShadowSampleVariance( mat4 lightMatrix) {
     if (projCoords.y > 1.0 || projCoords.x > 1.0 || projCoords.z > 1.0) return (0.0);
     if (projCoords.y < 0.0 || projCoords.x < 0.0 || projCoords.z < 0.0) return (0.0);
 	float bias = projCoords.z - (1.0/shadowmap_size) * shadow_bias;
-	return 0.5 - SampleVarianceShadowMap(tge_u_shadowMap, projCoords.xy, bias, 0.00000001,0.0);
+	return 0.5 - SampleVarianceShadowMap(tge_u_shadowMap, projCoords.xy, bias, 0.0000001,0.0);
 
 }
 

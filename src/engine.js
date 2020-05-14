@@ -591,6 +591,7 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
+            this.lastShaderId = -1;
             for (i1 = 0; i1 < lights.length; i1++) {
                 light = lights[i1];
                 if (light.castShadows) {
@@ -621,6 +622,12 @@ tge.engine = $extend(function (proto) {
 
     };
 
+    proto.renderSingleMesh = function (camera, mesh) {
+        this.useMaterial(mesh.material, mesh.material.shader);
+        this.updateCameraUniforms(camera);
+        this.updateModelViewMatrix(camera, mesh.model);
+        this.renderMesh(mesh);
+    }
 
     proto.bindRenderTarget = function (target) {
         if (target.uuid !== this.lastRenderTargetId) {

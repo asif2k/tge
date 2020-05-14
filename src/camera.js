@@ -5,6 +5,14 @@ import * from './math.js'
 tge.camera = $extend(function (proto, _super) {
 
 
+    proto.getDisplay = function () {
+        var mod = new tge.model(tge.geometry.cube());
+        mod.parent = this;
+        this.update();
+        mod.flags = tge.OBJECT_TYPES.MANIPULATORS;
+        return (mod);
+
+    };
 
 
     function camera() {
@@ -24,12 +32,15 @@ tge.camera = $extend(function (proto, _super) {
 
     proto.updateMatrixWorldInverse = function () {
         tge.mat4.invert(this.matrixWorldInvserse, this.matrixWorld);
-    }
+        return (this);
+    };
 
     proto.updateMatrixWorldProjection = function () {
         tge.mat4.multiply(this.matrixWorldProjection, this.matrixProjection, this.matrixWorldInvserse);
         this.updateFrustumPlanes(this.matrixWorldProjection);
-    }
+        return (this);
+    };
+
     var len = 0;
     proto.updateFrustumPlane = function (p, x, y, z, w) {
         len = x * x + y * y + z * z + w * w;

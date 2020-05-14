@@ -549,23 +549,15 @@ tge.createFloat32 = (function (len, creator) {
         clone: function (a) {
             return tge.quat(a);
         },
-        create: function () {
-
-            var out = new Float32Array(4);
-            out.fill(0);
-            out[3] = 1;
-            if (arguments.length === 1 && arguments[0].length > 3) {
-                for (x = 0; x < arguments[0].length; x++)
-                    out[x] = Math.round(arguments[0][x]);
-            }
-            else {
-                for (x = 0; x < arguments.length; x++)
-                    out[x] = arguments[x];
-            }
-
-
+        invert: function (out, a) {
+            a0 = a[0]; a1 = a[1]; a2 = a[2]; a3 = a[3];
+            dot = a0 * a0 + a1 * a1 + a2 * a2 + a3 * a3;
+            invDot = dot ? 1.0 / dot : 0;
+            out[0] = -a0 * invDot;
+            out[1] = -a1 * invDot;
+            out[2] = -a2 * invDot;
+            out[3] = a3 * invDot;
             return out;
-
         },
         set: tge.vec4.set,
         add: tge.vec4.add,

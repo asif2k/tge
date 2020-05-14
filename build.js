@@ -112,4 +112,4 @@ if (process.argv && process.argv.length > 2) {
 
 const exec = require("child_process").exec;
 
-//exec("http-serve");
+exec("http-serve");

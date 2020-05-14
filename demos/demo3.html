@@ -13,29 +13,29 @@
 
     tge.demo({}, function (app, engine, scene, camera) {
       var light0 = scene.addLight(new tge.light(), function (lg) {
-       // lg.setPosition(0, 5, 0);
+        lg.setPosition(0, 5, 0);
         lg.setDiffuse(0.5, 0.5, 0.5);
         lg.setAmbient(0.338, 0.338, 0.338).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
-        //lg.setRotation(-50 * tge.DEGTORAD, 0, 50 * tge.DEGTORAD);
-        
-       lg.setRotation(-180 * tge.DEGTORAD, 0, 0);
+        lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
+        lg.shadowMapSize = 2048;
         lg.castShadows = true;
+        
         scene.addModel(lg.getDisplay());
 
       });
 
-      var light1 = scene.addLight(new tge.point_light({ attenuation: [1.0, 0.045, 0.0075]}), function (lg) {
+      var light1 = scene.addLight(new tge.spot_light({ attenuation: [1.0, 0.045, 0.0075]}), function (lg) {
         lg.setPosition(0, 5, 0);
         lg.setDiffuse(0.5, 0.5, 0.5);
-        lg.setAmbient(0.638, 0.638, 0.638).setSpecular(0.5, 0.5, 0.5).setIntensity(0.5);
+        lg.setAmbient(0.638, 0.638, 0.638).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
 
-        //lg.setRotation(-50 * tge.DEGTORAD, 0, -50 * tge.DEGTORAD);
-        light0.parent = lg;
-       // lg.castShadows = true;
-      //  scene.addModel(lg.getDisplay());
+        lg.setRotation(-50 * tge.DEGTORAD, 0, -50 * tge.DEGTORAD);
+       // light0.parent = lg;
+      //  lg.castShadows = true;
+        scene.addModel(lg.getDisplay());
 
       });
-
+     // light0.parent = camera;
       tge.geometry.wavefront_obj_url("models/mon2.obj", function (geo) {
         scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
           md.setPosition(3, 0.5, 0);
@@ -53,24 +53,15 @@
         md.setRotation(-90 * tge.DEGTORAD, 0, 0);
       });
 
-      var test1 = true;
-      scene.createRandomModelsGrid(80, 10, function (md) {
-        if (test1) {
-          md.parent = light0;
-          md.setPosition(0, 0, 0);
-        }
-        else {
-          md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
-        }
-        test1 = false;
-        
+      scene.createRandomModelsGrid(80, 10, function (md) {        
+        md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);        
       }, tge.phong_material);
 
 
       app.mouseDrage2 = (function (base) {
         return function (dx, dy, e) {
           if (!e.ctrlKey) return base.apply(this, arguments);
-          else light1.yawPitch(-dy * 0.005, -dx * 0.005);
+          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
         }
       })(app.mouseDrage2);
 
@@ -95,8 +86,8 @@
 
       var shadow_params = {
         bias: 2, opacity: 30, update: function () {
-          light1.shadowBias = (this.bias / 100) * 0.2;
-          light1.shadowOpacity = this.opacity / 100;
+          light0.shadowBias = (this.bias / 100) * 0.2;
+          light0.shadowOpacity = this.opacity / 100;
         }
       };
 

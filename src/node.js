@@ -11,8 +11,8 @@ tge.node = $extend(function (proto) {
         this.quat = tge.quat();
         this.matrixNeedUpdate = true;
         this.rotationNeedUpdate = false;
-        this.uuid = $guidi();
-        this.version =0;
+
+        this.version = 0;
         this.enabled = true;
         this.enabling = false;
 
@@ -149,6 +149,7 @@ tge.transfrom_node = $extend(function (proto,_super) {
     proto.update = (function () {
         var origVersion;
         return function () {
+            if (this.version > 500000) this.version = 0;
             origVersion = this.version;
             this.enabling = this.enabled;
             if (this.updateMatrix()) {
@@ -170,8 +171,8 @@ tge.transfrom_node = $extend(function (proto,_super) {
                     }
                 }
 
-            }
-
+            } 
+           
             return (origVersion !== this.version);
 
         }
