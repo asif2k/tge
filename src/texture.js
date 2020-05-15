@@ -206,6 +206,8 @@ tge.rendertarget = $extend(function (proto,_super) {
             this.depthTexture.height = height;
             this.depthTexture.update(this.gl);
         }
+        this.vpBottom = height;
+        this.vpRight = width;
     }
 
     proto.setDepthTexture = function (depthTexture) {
@@ -257,8 +259,12 @@ tge.rendertarget = $extend(function (proto,_super) {
         this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), gl.COLOR_ATTACHMENT0);
 
         if (withDepth) {
-            this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT, false, width, height), gl.DEPTH_ATTACHMENT);
+            this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT ,false, width, height), gl.DEPTH_ATTACHMENT);
             this.depthTexture.targetId = this.uuid;
+
+          //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
+          //  this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
+
         }
         this.vpLeft = 0;
         this.vpTop = 0;

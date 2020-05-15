@@ -2,7 +2,7 @@ import * from './geometry.js'
 
 tge.shader = $extend(function (proto) {
 
-
+    
     function shader(vs, fs) {
 
         this.vs = vs;
@@ -11,6 +11,24 @@ tge.shader = $extend(function (proto) {
         this.uuid = $guidi();
         return (this);
 
+    }
+
+    
+    shader.context_param;
+    shader.$str=function(s,nestedChunks) {
+        return $str(s, "chunk", "param")(nestedChunks ? tge.shader.nestedGetChunk : tge.shader.getChunk,
+            tge.shader.getParam);
+    }
+    shader.nestedGetChunk=function (key) {
+        return tge.shader.$str(tge.shader.chunks[key],true);
+    }
+    shader.getChunk = function (key) {
+        return tge.shader.chunks[key];
+    }
+
+    shader.getParam=function(p) {
+        if (tge.shader.context_param && tge.shader.context_param[p] !== undefined) return tge.shader.context_param[p];
+        return "";
     }
 
     proto.setUniform = (function () {
@@ -79,7 +97,7 @@ tge.shader = $extend(function (proto) {
 
             var uniformsWriteFunc = {
                 5126: ['uniform1f', 2],//'float',
-                35664: ['uniform2f', 3],// 'vec2',
+                35664: ['uniform2fv', 2],// 'vec2',                
                 35665: ['uniform3fv', 2], //'vec3',
                 35666: ['uniform4fv', 2], //'vec4',
                 35678: ['uniform1i', 2], //'sampler2D',
@@ -89,7 +107,7 @@ tge.shader = $extend(function (proto) {
 
             function addUniformToShader(gl, shdr, name, type) {
 
-
+                
                 var location = gl.getUniformLocation(shdr.program, name);
                 var func = uniformsWriteFunc[type];
                 var uni = {};
@@ -133,22 +151,12 @@ tge.shader = $extend(function (proto) {
         return function (gl, shdr, _params) {
 
             if (shdr.compiled) return;
-            var params = _params || {};
-            $assign(params, shdr.params);
-            function getChunk(key) {
-                return $str(shader.chunks[key], 'params', 'chunk')(params, getChunk);
-            }
+            tge.shader.context_param = _params;
 
-            for (let p in params) {
-                if (typeof params[p] === 'string') {
-                    params[p] = $str(shdr.params[p], 'params', 'chunk')(params, getChunk);
-                }
-            }
+
+            shdr.vs =tge.shader.$str(shdr.vs,true);
+            shdr.fs = tge.shader.$str(shdr.fs,true);
             shdr.gl = gl;
-            shdr.vs = $str(shdr.vs, 'params', 'chunk')(params, getChunk);
-            shdr.fs = $str(shdr.fs, 'params', 'chunk')(params, getChunk);
-
-
 
 
             var vshdr, fshdr;
@@ -169,12 +177,6 @@ tge.shader = $extend(function (proto) {
     })();
 
     shader.chunks = {};
-    shader.getChunk = function (key, params) {
-        function _getChunk(key) {
-            return shader.getChunk(key, params);
-        }
-        return $$(shader.chunks[key], 'params', 'chunk')(params, _getChunk);
-    };
     shader.loadChunks = function (text) {
         var chunks = text.split('/*chunk-');
         chunks.forEach(function (chunk) {
@@ -193,9 +195,10 @@ tge.shader = $extend(function (proto) {
     };
 
     shader.loadChunks(import('shader_chunks.glsl'));
-
+    
     shader.parse = function (_source, params) {
-
+        
+       
         var source = _source.split('/*--fragment--*/');
         var shader = new tge.shader(source[0].toString().trim(), source[1].toString().trim());
         shader.source = _source;
@@ -258,7 +261,7 @@ tge.pipleline_shader = $extend(function (proto, _super) {
     }
 
     proto.extend = function (source) {
-        return tge.pipleline_shader.parse(source, this);
+        return tge.pipleline_shader.parse(source,  this);
     }
     function pipleline_shader() {
         _super.apply(this, arguments);
@@ -267,11 +270,11 @@ tge.pipleline_shader = $extend(function (proto, _super) {
         this.functionsDefinitions = {};
         return (this);
     }
-
+    
+    
 
     pipleline_shader.parse = function (source, parent, ignoreFragment, ignoreVertex) {
         var shader = new tge.pipleline_shader();
-
 
         shader.parts = parseShaderSource(source);
         shader.source = source;

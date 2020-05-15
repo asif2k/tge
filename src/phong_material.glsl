@@ -38,7 +38,7 @@ varying vec3 tge_v_normal;
 void fragment(void) {
 	initPipelineParams();
 	vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
-	<?for (var i = 0;i < params.fws_lightsCount;i++) {?>
+	<?for (var i = 0;i < param('fws_lightsCount');i++) {?>
 			fws_totalLight += fws_lighting(
 				tge_u_objectMaterial,
 				tge_u_lightMaterial<?=i?>,

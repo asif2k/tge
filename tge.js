@@ -1732,6 +1732,27 @@ tge.geometry = $extend(function (proto) {
     })();
 
 
+    geometry.quad2D = function () {
+        var g = new geometry();
+        g.addAttribute("tge_a_position", {
+            data: new Float32Array([
+                -1, -1,
+                1, -1,
+               1, 1,
+
+                -1, -1,
+                1, 1,
+                -1, 1,
+               
+            ]),
+            itemSize: 2, offset: 0
+        });
+        g.numItems =4;        
+        g.geoType = "quad2d";
+        return (g);
+    };
+
+
     geometry.quad = function () {
         var g = new geometry();
         g.addAttribute("tge_a_position", {
@@ -2307,7 +2328,7 @@ tge.geometry = $extend(function (proto) {
 
 tge.shader = $extend(function (proto) {
 
-
+    
     function shader(vs, fs) {
 
         this.vs = vs;
@@ -2316,6 +2337,24 @@ tge.shader = $extend(function (proto) {
         this.uuid = $guidi();
         return (this);
 
+    }
+
+    
+    shader.context_param;
+    shader.$str=function(s,nestedChunks) {
+        return $str(s, "chunk", "param")(nestedChunks ? tge.shader.nestedGetChunk : tge.shader.getChunk,
+            tge.shader.getParam);
+    }
+    shader.nestedGetChunk=function (key) {
+        return tge.shader.$str(tge.shader.chunks[key],true);
+    }
+    shader.getChunk = function (key) {
+        return tge.shader.chunks[key];
+    }
+
+    shader.getParam=function(p) {
+        if (tge.shader.context_param && tge.shader.context_param[p] !== undefined) return tge.shader.context_param[p];
+        return "";
     }
 
     proto.setUniform = (function () {
@@ -2384,7 +2423,7 @@ tge.shader = $extend(function (proto) {
 
             var uniformsWriteFunc = {
                 5126: ['uniform1f', 2],//'float',
-                35664: ['uniform2f', 3],// 'vec2',
+                35664: ['uniform2fv', 2],// 'vec2',                
                 35665: ['uniform3fv', 2], //'vec3',
                 35666: ['uniform4fv', 2], //'vec4',
                 35678: ['uniform1i', 2], //'sampler2D',
@@ -2394,7 +2433,7 @@ tge.shader = $extend(function (proto) {
 
             function addUniformToShader(gl, shdr, name, type) {
 
-
+                
                 var location = gl.getUniformLocation(shdr.program, name);
                 var func = uniformsWriteFunc[type];
                 var uni = {};
@@ -2438,22 +2477,12 @@ tge.shader = $extend(function (proto) {
         return function (gl, shdr, _params) {
 
             if (shdr.compiled) return;
-            var params = _params || {};
-            $assign(params, shdr.params);
-            function getChunk(key) {
-                return $str(shader.chunks[key], 'params', 'chunk')(params, getChunk);
-            }
+            tge.shader.context_param = _params;
 
-            for (let p in params) {
-                if (typeof params[p] === 'string') {
-                    params[p] = $str(shdr.params[p], 'params', 'chunk')(params, getChunk);
-                }
-            }
+
+            shdr.vs =tge.shader.$str(shdr.vs,true);
+            shdr.fs = tge.shader.$str(shdr.fs,true);
             shdr.gl = gl;
-            shdr.vs = $str(shdr.vs, 'params', 'chunk')(params, getChunk);
-            shdr.fs = $str(shdr.fs, 'params', 'chunk')(params, getChunk);
-
-
 
 
             var vshdr, fshdr;
@@ -2474,12 +2503,6 @@ tge.shader = $extend(function (proto) {
     })();
 
     shader.chunks = {};
-    shader.getChunk = function (key, params) {
-        function _getChunk(key) {
-            return shader.getChunk(key, params);
-        }
-        return $$(shader.chunks[key], 'params', 'chunk')(params, _getChunk);
-    };
     shader.loadChunks = function (text) {
         var chunks = text.split('/*chunk-');
         chunks.forEach(function (chunk) {
@@ -2570,82 +2593,15 @@ uniform mat3 tge_u_textureMatrix;
 
 
 /*chunk-lights-matrix-all*/
-<?for(var i= 0;i<params.fws_lightsCount;i++) {?>
+<?for(var i= 0;i<param('fws_lightsCount');i++) {?>
 uniform mat4 tge_u_lightMatrix<?=i?>;
 <?}?>
 
 /*chunk-lights-material-all*/
-<?for(var i = 0;i < params.fws_lightsCount;i++){?>
+<?for(var i = 0;i < param('fws_lightsCount');i++){?>
 uniform mat4 tge_u_lightMaterial<?=i?>;
 <?}?>
 
-
-
-/*chunk-forward-shading*/
-<?for (var i = 0;i < params.fws_lightsCount;i++) {?>
-uniform mat4 tge_u_lightMaterial<?=i?>;
-uniform mat4 tge_u_lightMatrix<?=i?>;
-<?}?>
-
-float fws_distanceToLight;
-float fws_lambertian;
-float fws_specular;
-float fws_attenuation;
-float fws_intensity;
-float fws_spotLightCalc;
-float fws_spotTheta;
-float fws_spotLightStatus;
-vec3 fws_totalLight;
-vec3 fws_directionToLight;
-vec3 fws_lightValue;
-vec3 directionToEye;
-void applyLight(mat4 objectMaterial,mat4 lightMaterial, mat4 lightMatrix,vec3 vertexPosition,vec3 vertexNormal) {
-
-fws_directionToLight = (lightMatrix[3].xyz - vertexPosition);
-fws_distanceToLight = length(fws_directionToLight);
-fws_directionToLight = normalize(fws_directionToLight);
-fws_lambertian = max(dot(fws_directionToLight.xyz, vertexNormal), 0.0);
-fws_intensity = lightMaterial[0].w;
-fws_attenuation = (lightMaterial[3].x + lightMaterial[3].y * fws_distanceToLight
-+ lightMaterial[3].z * (fws_distanceToLight * fws_distanceToLight)) + lightMaterial[3].w;
-
-
-fws_spotLightStatus = step(0.000001, lightMaterial[1].w);
-fws_spotTheta = dot(fws_directionToLight, normalize(lightMatrix[2].xyz));
-fws_spotLightCalc = clamp((fws_spotTheta - lightMaterial[2].w) / (lightMaterial[1].w - lightMaterial[2].w), 0.0, 1.0);
-fws_intensity *= (fws_spotLightStatus * (step(lightMaterial[1].w, fws_spotTheta) * fws_spotLightCalc))
-+ abs(1.0 - fws_spotLightStatus);
-
-
-
-fws_specular = pow(max(dot(normalize(fws_directionToLight.xyz + directionToEye), vertexNormal), 0.0), objectMaterial[2].w) * fws_lambertian;
-fws_specular *= fws_intensity * step(0.0, fws_lambertian);
-
-
-fws_lightValue = (lightMaterial[0].xyz * objectMaterial[0].xyz) +
-(objectMaterial[1].xyz * fws_lambertian * lightMaterial[1].xyz * fws_intensity) +
-(objectMaterial[2].xyz * fws_specular * lightMaterial[2].xyz);
-
-
-
-fws_totalLight +=(fws_lightValue / fws_attenuation);
-
-
-}
-
-
-
-vec4 applyForwardShading(mat4 objectMaterial, vec4 eyePosition, vec3 vertexPosition, vec3 vertexNormal){
-
-directionToEye = normalize((eyePosition.xyz - vertexPosition));
-
-vertexNormal = normalize(vertexNormal);
-<? for (var i = 0;i < params.fws_lightsCount;i++) {?>
-applyLight(objectMaterial, tge_u_lightMaterial<?=i?>, tge_u_lightMatrix<?=i?>,vertexPosition,vertexNormal);
-<?}?>
-
-return vec4(fws_totalLight,objectMaterial[0].w);
-}
 
 
 /*chunk-fws_lighting*/
@@ -2667,6 +2623,9 @@ vec3 fws_vertexPosition, vec3 fws_vertexNormal,
 vec3 fws_directionToEye,vec3 fws_directionToLight, vec3 fws_directionFromLight) {
 
 fws_distanceToLight = length(fws_directionToLight);
+
+
+
 fws_directionToLight = normalize(fws_directionToLight);
 fws_lambertian = max(dot(fws_directionToLight, fws_vertexNormal), 0.0);
 fws_intensity = fws_lightMaterial[0].w;
@@ -2762,246 +2721,58 @@ float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d * 
 
 return min(max(p, pMax), 1.0);
 }
-/*chunk-temp*/
-
-float snoise(vec4 v)
-{
-const vec4C = vec4(0.138196601125011, 0.276393202250021, 0.414589803375032, -0.447213595499958);
 
 
-vec4 i = floor(v + dot(v, vec4(F4)));
-vec4 x0 = v - i + dot(i, C.xxxx);
-
-
-
-vec4 i0;
-vec3 isX = step(x0.yzw, x0.xxx);
-vec3 isYZ = step(x0.zww, x0.yyz);
-
-i0.x = isX.x + isX.y + isX.z;
-i0.yzw = 1.0 - isX;
-
-i0.y += isYZ.x + isYZ.y;
-i0.zw += 1.0 - isYZ.xy;
-i0.z += isYZ.z;
-i0.w += 1.0 - isYZ.z;
-
-
-vec4 i3 = clamp(i0, 0.0, 1.0);
-vec4 i2 = clamp(i0 - 1.0, 0.0, 1.0);
-vec4 i1 = clamp(i0 - 2.0, 0.0, 1.0);
-
-
-vec4 x1 = x0 - i1 + C.xxxx;
-vec4 x2 = x0 - i2 + C.yyyy;
-vec4 x3 = x0 - i3 + C.zzzz;
-vec4 x4 = x0 + C.wwww;
-
-
-i = mod289(i);
-float j0 = permute(permute(permute(permute(i.w) + i.z) + i.y) + i.x);
-vec4 j1 = permute(permute(permute(permute(
-i.w + vec4(i1.w, i2.w, i3.w, 1.0))
-+ i.z + vec4(i1.z, i2.z, i3.z, 1.0))
-+ i.y + vec4(i1.y, i2.y, i3.y, 1.0))
-+ i.x + vec4(i1.x, i2.x, i3.x, 1.0));
-
-
-vec4 ip = vec4(1.0 / 294.0, 1.0 / 49.0, 1.0 / 7.0, 0.0);
-
-vec4 p0 = grad4(j0, ip);
-vec4 p1 = grad4(j1.x, ip);
-vec4 p2 = grad4(j1.y, ip);
-vec4 p3 = grad4(j1.z, ip);
-vec4 p4 = grad4(j1.w, ip);
-
-
-vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
-p0 *= norm.x;
-p1 *= norm.y;
-p2 *= norm.z;
-p3 *= norm.w;
-p4 *= taylorInvSqrt(dot(p4, p4));
-
-
-vec3 m0 = max(0.6 - vec3(dot(x0, x0), dot(x1, x1), dot(x2, x2)), 0.0);
-vec2 m1 = max(0.6 - vec2(dot(x3, x3), dot(x4, x4)), 0.0);
-m0 = m0 * m0;
-m1 = m1 * m1;
-return 49.0 * (dot(m0 * m0, vec3(dot(p0, x0), dot(p1, x1), dot(p2, x2)))
-+ dot(m1 * m1, vec2(dot(p3, x3), dot(p4, x4))));
-
+/*chunk-pp1*/
+void fragment(){
+super_fragment();
+if(tge_v_uv.x>0.5){
+gl_FragColor.x+=0.3*sin(tge_u_frameTime);
+gl_FragColor.y+=0.1*cos(tge_u_frameTime);
+}
 }
 
-/*chunk-wireframe-feature*/
-
-
-
-
-vec4 mod289(vec4 x) {
-return x - floor(x * (1.0 / 289.0)) * 289.0; }
-
-float mod289(float x) {
-return x - floor(x * (1.0 / 289.0)) * 289.0; }
-
-vec4 permute(vec4 x) {
- return mod289(((x*34.0)+1.0)*x);
+/*chunk-pp2*/
+void fragment(){
+super_fragment();
+if(tge_v_uv.x<0.25){
+gl_FragColor.z+=0.3*sin(tge_u_frameTime);
+gl_FragColor.y+=0.1*cos(tge_u_frameTime);
 }
-
-float permute(float x) {
- return mod289(((x*34.0)+1.0)*x);
-}
-
-vec4 taylorInvSqrt(vec4 r)
-{
-return 1.79284291400159 - 0.85373472095314 * r;
-}
-
-float taylorInvSqrt(float r)
-{
-return 1.79284291400159 - 0.85373472095314 * r;
-}
-
-vec4 grad4(float j, vec4 ip)
-{
-const vec4 ones = vec4(1.0, 1.0, 1.0, -1.0);
-vec4 p,s;
-
-p.xyz = floor( fract (vec3(j) * ip.xyz) * 7.0) * ip.z - 1.0;
-p.w = 1.5 - dot(abs(p.xyz), ones.xyz);
-s = vec4(lessThan(p, vec4(0.0)));
-p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www;
-
-return p;
-}
-
-const float F4 = 0.309016994374947451;
-
-const vec4 C = vec4(0.138196601125011, 0.276393202250021, 0.414589803375032, -0.447213595499958);
-
-float snoise(vec4 v)
-{
-
-
-
-
-
-vec4 i = floor(v + dot(v, vec4(F4)));
-vec4 x0 = v - i + dot(i, C.xxxx);
-
-vec4 i0;
-vec3 isX = step(x0.yzw, x0.xxx);
-vec3 isYZ = step(x0.zww, x0.yyz);
-
-i0.x = isX.x + isX.y + isX.z;
-i0.yzw = 1.0 - isX;
-
-i0.y += isYZ.x + isYZ.y;
-i0.zw += 1.0 - isYZ.xy;
-i0.z += isYZ.z;
-i0.w += 1.0 - isYZ.z;
-
-
-vec4 i3 = clamp(i0, 0.0, 1.0);
-vec4 i2 = clamp(i0 - 1.0, 0.0, 1.0);
-vec4 i1 = clamp(i0 - 2.0, 0.0, 1.0);
-
-
-vec4 x1 = x0 - i1 + C.xxxx;
-vec4 x2 = x0 - i2 + C.yyyy;
-vec4 x3 = x0 - i3 + C.zzzz;
-vec4 x4 = x0 + C.wwww;
-
-
-i = mod289(i);
-float j0 = permute(permute(permute(permute(i.w) + i.z) + i.y) + i.x);
-vec4 j1 = permute(permute(permute(permute(
-i.w + vec4(i1.w, i2.w, i3.w, 1.0))
-+ i.z + vec4(i1.z, i2.z, i3.z, 1.0))
-+ i.y + vec4(i1.y, i2.y, i3.y, 1.0))
-+ i.x + vec4(i1.x, i2.x, i3.x, 1.0));
-
-
-vec4 ip = vec4(1.0 / 294.0, 1.0 / 49.0, 1.0 / 7.0, 0.0);
-
-vec4 p0 = grad4(j0, ip);
-vec4 p1 = grad4(j1.x, ip);
-vec4 p2 = grad4(j1.y, ip);
-vec4 p3 = grad4(j1.z, ip);
-vec4 p4 = grad4(j1.w, ip);
-
-
-vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
-p0 *= norm.x;
-p1 *= norm.y;
-p2 *= norm.z;
-p3 *= norm.w;
-p4 *= taylorInvSqrt(dot(p4, p4));
-
-
-vec3 m0 = max(0.6 - vec3(dot(x0, x0), dot(x1, x1), dot(x2, x2)), 0.0);
-vec2 m1 = max(0.6 - vec2(dot(x3, x3), dot(x4, x4)), 0.0);
-m0 = m0 * m0;
-m1 = m1 * m1;
-return 49.0 * (dot(m0 * m0, vec3(dot(p0, x0), dot(p1, x1), dot(p2, x2)))
-+ dot(m1 * m1, vec2(dot(p3, x3), dot(p4, x4))));
-
-}
-
-const float PI = 3.14159265359;
-
-float aastep (float threshold, float dist) {
-float afwidth = fwidth(dist) * 0.5;
-return smoothstep(threshold - afwidth, threshold + afwidth, dist);
 }
 
 
 
-vec4 getStyledWireframe (vec3 barycentric,vec3 position) {
-float d = min(min(barycentric.x, barycentric.y), barycentric.z);
-float noiseOff = 0.0;
+/*chunk-defaultPostProcessShader*/
+<?=chunk('precision')?>
+<?=chunk('pipelineParams')?>
+
+const vec2 madd=vec2(0.5,0.5);
+varying vec2 tge_v_uv;
+attribute vec2 tge_a_position;
 
 
-
-noiseOff = snoise(vec4(position.xyz * 1.0,0.35)) * 0.15;
-noiseOff = noiseOff+ snoise(vec4(position.xyz * 80.0,0.5)) * 0.12;
-
-
-
-
-
-
-d += noiseOff;
-
-float positionAlong = max(barycentric.x, barycentric.y);
-if (barycentric.y < barycentric.x && barycentric.y < barycentric.z) {
-positionAlong = 1.0 - positionAlong;
+void vertex(){
+initPipelineParams();
+gl_Position = vec4(tge_a_position.xy,0.0,1.0);
+tge_v_uv = tge_a_position.xy*madd+madd; 
 }
 
-float computedThickness = 0.01;
+<?=chunk('precision')?>
+<?=chunk('pipelineParams')?>
 
-// create the repeating dash pattern
-
-float dashRepeats = 2.0;
-float dashLength = 0.55;
-
-float offset = 1.0 / dashRepeats * dashLength / 2.0;
+uniform sampler2D tge_u_texture_input;
+varying vec2 tge_v_uv;
 
 
-
-float pattern = fract((positionAlong + offset) * dashRepeats);
-computedThickness *= 1.0 - aastep(dashLength, pattern);
-
- 
-float edge = 1.0 - aastep(computedThickness, d);
-vec4 outColor = vec4(0.0);
-outColor.rgb=mix(vec3(1.0,0.0,0.0), vec3(1.0), vec3(edge));
-outColor.a = 0.5;
-return outColor;
+void fragment(void) {
+initPipelineParams();
+gl_FragColor = texture2D(tge_u_texture_input, tge_v_uv) ;
 }`);
-
+    
     shader.parse = function (_source, params) {
-
+        
+       
         var source = _source.split('/*--fragment--*/');
         var shader = new tge.shader(source[0].toString().trim(), source[1].toString().trim());
         shader.source = _source;
@@ -3064,7 +2835,7 @@ tge.pipleline_shader = $extend(function (proto, _super) {
     }
 
     proto.extend = function (source) {
-        return tge.pipleline_shader.parse(source, this);
+        return tge.pipleline_shader.parse(source,  this);
     }
     function pipleline_shader() {
         _super.apply(this, arguments);
@@ -3073,11 +2844,11 @@ tge.pipleline_shader = $extend(function (proto, _super) {
         this.functionsDefinitions = {};
         return (this);
     }
-
+    
+    
 
     pipleline_shader.parse = function (source, parent, ignoreFragment, ignoreVertex) {
         var shader = new tge.pipleline_shader();
-
 
         shader.parts = parseShaderSource(source);
         shader.source = source;
@@ -3533,6 +3304,8 @@ tge.rendertarget = $extend(function (proto,_super) {
             this.depthTexture.height = height;
             this.depthTexture.update(this.gl);
         }
+        this.vpBottom = height;
+        this.vpRight = width;
     }
 
     proto.setDepthTexture = function (depthTexture) {
@@ -3584,8 +3357,12 @@ tge.rendertarget = $extend(function (proto,_super) {
         this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), gl.COLOR_ATTACHMENT0);
 
         if (withDepth) {
-            this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT, false, width, height), gl.DEPTH_ATTACHMENT);
+            this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT ,false, width, height), gl.DEPTH_ATTACHMENT);
             this.depthTexture.targetId = this.uuid;
+
+          //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
+          //  this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
+
         }
         this.vpLeft = 0;
         this.vpTop = 0;
@@ -3697,6 +3474,9 @@ tge.material = $extend(function (proto,_super) {
                 engine.useTexture(this.ambientTexture, 0);
                 if (shader.setUniform("tge_u_normalMap", 1)) {
                     engine.useTexture(this.normalMap, 1);
+                }
+                if (shader.setUniform("tge_u_dispMap", 2)) {
+                    engine.useTexture(this.dispMap, 2);
                 }
                 shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
             }
@@ -3892,7 +3672,7 @@ varying vec3 tge_v_normal;
 void fragment(void) {
 initPipelineParams();
 vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
-<?for (var i = 0;i < params.fws_lightsCount;i++) {?>
+<?for (var i = 0;i < param('fws_lightsCount');i++) {?>
 fws_totalLight += fws_lighting(
 tge_u_objectMaterial,
 tge_u_lightMaterial<?=i?>,
@@ -3918,8 +3698,9 @@ tge.parallax_material = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.shader = tge.parallax_material.shader;
-        this.dispMapScale = 0.4;
+        this.dispMapScale = 1;
         this.dispMapOffset = -1;
+        this.normalMapMatrix = tge.mat3();
         $merge(options, this);
         return (this);
     }
@@ -3929,26 +3710,33 @@ tge.parallax_material = $extend(function (proto, _super) {
             super_useShader.apply(this, [shader, engine]);
 
 
-
             dispParams[0] = this.dispMapScale;
             dispParams[1] = this.dispMapOffset;
+            shader.setUniform("tge_u_normalMapMatrix", this.normalMapMatrix);
             shader.setUniform("tge_u_dispParams", dispParams);
         }
     })(proto.useShader);
     
     parallax_material.shader = tge.phong_material.shader.extend(`varying mat3 tge_v_tbnMatrix;
 
+uniform mat3 tge_u_normalMapMatrix;
+
+varying vec2 tge_v_nm_uv;
+
 void vertex(){
 super_vertex();
 vec3 t = normalize((tge_u_modelMatrix * tge_a_tangent).xyz);
 t = normalize(t - dot(t, tge_v_normal) * tge_v_normal);
 tge_v_tbnMatrix = mat3(t, cross(tge_v_normal, t), tge_v_normal);
+
+tge_v_nm_uv = (tge_u_normalMapMatrix * vec3(tge_a_uv, 1.0)).xy;
+
 }
 
 varying mat3 tge_v_tbnMatrix;
 uniform sampler2D tge_u_normalMap;
 uniform sampler2D tge_u_dispMap;
-
+varying vec2 tge_v_nm_uv;
 
 uniform vec4 tge_u_dispParams;
 void fragment(){
@@ -3956,15 +3744,16 @@ void fragment(){
 
 vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
 
-float baseBias = tge_u_dispParams.x/2.0;
+float baseBias = tge_u_dispParams.x*0.5;
 float bias =-baseBias + baseBias * tge_u_dispParams.y;
 
-vec2 uv=tge_v_uv+(fws_directionToEye*tge_v_tbnMatrix).xy* (texture2D(tge_u_dispMap, tge_v_uv).r * tge_u_dispParams.x + bias);;
+vec2 uv=tge_v_nm_uv+(fws_directionToEye*tge_v_tbnMatrix).xy*
+(texture2D(tge_u_dispMap, tge_v_nm_uv).r * tge_u_dispParams.x + bias);
 
 vec3 normal = normalize(tge_v_tbnMatrix * (2.0 * texture2D(tge_u_normalMap, uv).xyz - 1.0));
 
-vec4 amb=texture2D(tge_u_ambientTexture, uv);
-<?for (var i = 0;i < params.fws_lightsCount;i++) {?>
+vec4 amb=texture2D(tge_u_ambientTexture, tge_v_uv);
+<?for (var i = 0;i < param('fws_lightsCount');i++) {?>
 fws_totalLight += fws_lighting(
 tge_u_objectMaterial,
 tge_u_lightMaterial<?=i?>,
@@ -4265,6 +4054,19 @@ tge.ortho_camera = $extend(function (proto, _super) {
         this.version++;
     };
 
+    proto.setOrthoProjection = function (left, right, bottom, top, near, far) {
+        this.left = left;
+        this.right = right;
+        this.bottom = bottom;
+        this.top = top;
+        this.near = near;
+        this.far = far;
+
+        this.aspect = Math.abs((this.right - this.left) / (this.top - this.bottom));
+        tge.mat4.ortho(this.matrixProjection, this.left, this.right, this.bottom, this.top, this.near, this.far);
+        return this;
+    };
+
     return ortho_camera;
 
 }, tge.camera);
@@ -4310,13 +4112,10 @@ tge.light = $extend(function (proto, _super) {
     };
 
 
-    proto.validShadowCaster = function (node) {
+    proto.validShadowCaster = function (camera,node) {
         return true;
     };
 
-    proto.validShadowReceiver = function (node) {
-        return true;
-    };
 
     proto.getShadowCamera = (function () {
         var d = 0;
@@ -4360,6 +4159,18 @@ return 0.5 - SampleVarianceShadowMap(tge_u_shadowMap, projCoords.xy, bias, 0.000
 
 }
 
+float getShadowSample( mat4 lightMatrix) {
+vec4 projCoords = lightMatrix * tge_v_shadow_vertex;
+ float shadowmap_size=tge_u_shadow_params.z;
+float shadow_bias=tge_u_shadow_params.x;
+projCoords.xyz = projCoords.xyz / projCoords.w;
+projCoords.xyz = projCoords.xyz * 0.5 + 0.5;
+if (projCoords.y > 1.0 || projCoords.x > 1.0 || projCoords.z > 1.0) return (0.0);
+if (projCoords.y < 0.0 || projCoords.x < 0.0 || projCoords.z < 0.0) return (0.0);
+float bias = projCoords.z - (1.0/shadowmap_size) * shadow_bias;
+float d = texture2D(tge_u_shadowMap, projCoords.xy).r;
+return bias > d ? 0.5 : 0.0;
+}
 
 void fragment(){
 float shadowOpacity=tge_u_shadow_params.y;
@@ -4507,7 +4318,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
         this.lightType = 0;
         this.shadowBias = 0.025;
         this.shadowOpacity = 0.25;
-        this.shadowCameraDistance = -20;
+        this.shadowCameraDistance = 20;
 
         this.castShadows = false;
 
@@ -4517,6 +4328,139 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
         return (this);
 
     }
+
+
+
+
+
+    light.castShadows = (function () {
+
+        var i = 0, li = 0, light, d;
+        var tge_u_shadow_params = tge.vec4();
+
+        var orth_camera = new tge.ortho_camera(-1, 1, -1, 1, -1, 1);
+        var shadow_maps = {}, shadow_map, i = 0, castCount, updateLightCameraMatrices = false;
+
+        function getShadowMap(engine,size) {
+            shadow_map = shadow_maps[size];
+            if (!shadow_map) {
+                shadow_map = new tge.rendertarget(engine.gl, size, size, true);
+                shadow_maps[light.shadowMapSize] = shadow_map;
+            }
+            return shadow_map;
+        }
+
+        var castCount;
+        function renderShadowCasters(engine, light, light_camera, castShadowMeshes) {
+            castCount = 0;
+            for (i = 0; i < castShadowMeshes.length; i++) {
+                mesh = castShadowMeshes[i];
+
+                if (!light.validShadowCaster(light_camera, mesh.model)) continue;
+                castCount++;
+                if (!mesh.material.shader.depthShader) {
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse('void fragment(){gl_FragColor=vec4(1.0);}', mesh.material.shader, true);
+                    mesh.material.shader.depthShader.shadowShader = true;
+                }
+                engine.useMaterial(mesh.material, mesh.material.shader.depthShader);
+                engine.updateCameraUniforms(light_camera);
+                engine.updateModelViewMatrix(light_camera, mesh.model);
+                engine.gl.cullFace(engine.gl.FRONT);
+                engine.renderMesh(mesh);
+            }         
+
+            if (castCount > 0) engine.gl.cullFace(engine.gl.BACK);
+            return castCount;
+
+
+        }
+
+        function renderShadowReceivers(engine, light,light_camera,camera, receiveShadowMeshes) {
+           
+            tge_u_shadow_params[0] = light.shadowBias;
+            tge_u_shadow_params[1] = light.shadowOpacity
+            tge_u_shadow_params[2] = light.shadowMapSize;            
+           
+            for (i = 0; i < receiveShadowMeshes.length; i++) {
+                mesh = receiveShadowMeshes[i];
+                if (engine.useMaterial(mesh.material, light.getShadowReceiverShader(mesh.material.shader))) {
+                    engine.activeShader.setUniform("tge_u_shadow_params", tge_u_shadow_params);
+                    engine.activeShader.setUniform("tge_u_shadowMap", 2);
+                    engine.useTexture(shadow_map.depthTexture, 2);
+                    engine.activeShader.setUniform("tge_u_lightCameraMatrix", light_camera.matrixWorldProjection);
+                };
+
+                engine.updateCameraUniforms(camera);
+                engine.updateModelViewMatrix(camera, mesh.model);
+                engine.renderMesh(mesh);
+
+            }
+            
+        }
+
+        function directionalLightShadow(light, engine, camera, castShadowMeshes, receiveShadowMeshes) {
+            shadow_map = getShadowMap(engine, light.shadowMapSize);            
+            updateLightCameraMatrices = false;
+            if (orth_camera.light !== light.uuid) {
+                orth_camera.light = light.uuid;
+                d = light.shadowCameraDistance * 2;
+                orth_camera.setOrthoProjection(-d, d, -d, d, -d * 0.5, d);
+                updateLightCameraMatrices = true;
+            }
+            
+            if (orth_camera.shadowLightVersion !== light.version || updateLightCameraMatrices) {
+                orth_camera.shadowLightVersion = light.version;
+                tge.mat4.copy(orth_camera.matrixWorld, light.matrixWorld);
+                updateLightCameraMatrices = true;
+            }
+            if (orth_camera.shadowCameraVersion !== camera.version || updateLightCameraMatrices) {
+                d =-light.shadowCameraDistance;
+                orth_camera.shadowCameraVersion = camera.version;
+                orth_camera.worldPosition[0] = (camera.fwVector[0] * d) + camera.worldPosition[0];
+                orth_camera.worldPosition[1] = (camera.fwVector[1] * d) + camera.worldPosition[1];
+                orth_camera.worldPosition[2] = (camera.fwVector[2] * d) + camera.worldPosition[2];
+                updateLightCameraMatrices = true;
+            }
+            if (updateLightCameraMatrices) {
+                orth_camera.updateMatrixWorldInverse().updateMatrixWorldProjection();
+                orth_camera.version = camera.version + light.version;
+            }
+
+            shadow_map.bind();
+            castCount = renderShadowCasters(engine, light, orth_camera, castShadowMeshes);
+            engine.setDefaultViewport();
+
+            // if any mesh was rendered in shadow map
+            if (castCount > 0) {                
+                engine.enableFWRendering();
+                engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
+                renderShadowReceivers(engine, light, orth_camera, camera, receiveShadowMeshes);
+                engine.gl.blendEquation(engine.gl.FUNC_ADD);
+                engine.disableFWRendering();
+            }
+
+
+
+
+        }
+
+        return function (lights, engine, camera, allMeshes) {
+            for (li = 0; li < lights.length; li++) {
+                light = lights[li];
+                if (light.lightType === 0) {
+                    directionalLightShadow(light, engine, camera, allMeshes.castShadowMeshes, allMeshes.receiveShadowMeshes);
+                }
+            }
+
+
+        }
+    })();
+
+
+
+
+
+
 
     return light;
 
@@ -4551,6 +4495,52 @@ tge.point_light = $extend(function (proto, _super) {
         tge.vec3.set(this.attenuation, a, b, c);
         return (this);
     };
+
+
+    proto.setAttenuationByDistance = (function () {
+        var values = [[7, 1.0, 0.7, 1.8],
+        [13, 1.0, 0.35, 0.44],
+        [20, 1.0, 0.22, 0.20],
+        [32, 1.0, 0.14, 0.07],
+        [50, 1.0, 0.09, 0.032],
+        [65, 1.0, 0.07, 0.017],
+        [100, 1.0, 0.045, 0.0075],
+        [160, 1.0, 0.027, 0.0028],
+        [200, 1.0, 0.022, 0.0019],
+        [325, 1.0, 0.014, 0.0007],
+        [600, 1.0, 0.007, 0.0002],
+        [3250, 1.0, 0.0014, 0.000007]];
+
+
+
+        var v1, v2, i,f;
+        return function (d) {
+            for (i = 0; i < values.length; i++) {
+                if (d < values[i][0]) {
+                    v2 = i;
+                    break;
+                }
+            }
+
+            if (v2 === 0) {
+                return this.setAttenuation.apply(this, values[0]);
+            }
+            v1 = v2 - 1;
+            f = values[v2][0] - values[v1][0];
+            f = (d - values[v1][0]) / f;
+
+            this.attenuation[0] = values[v1][1] + (values[v2][1] - values[v1][1]) * f;
+            this.attenuation[1] = values[v1][2] + (values[v2][2] - values[v1][2]) * f;
+            this.attenuation[2] = values[v1][3] + (values[v2][3] - values[v1][3]) * f;
+
+        //    console.log(v1 + "-" + v2, this.attenuation.join(" ") );
+            
+
+
+
+            return (this);
+        }
+    })();
 
 
     proto.renderShadows2 = (function () {
@@ -4668,7 +4658,13 @@ tge.point_light = $extend(function (proto, _super) {
         _super.apply(this, arguments);
         this.range = options.range || 30;
 
-        this.setAttenuation(this.attenuation[0], this.attenuation[1], this.attenuation[2]);
+        if (options.attenuation) {
+            this.setAttenuation(this.attenuation[0], this.attenuation[1], this.attenuation[2]);
+        }
+        else {
+            this.setAttenuationByDistance(40);
+        }
+        
 
         this.specular[3] = 0;
         this.diffuse[3] = 0;
@@ -4704,7 +4700,7 @@ tge.spot_light = $extend(function (proto, _super) {
     }
 
     proto.setInnerAngle = function (angle) {
-        this.specular[3] = Math.cos(angle / 2);
+        this.specular[3] = Math.cos(angle )/2;
         return (this);
     }
 
@@ -4713,11 +4709,16 @@ tge.spot_light = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.viewAngle = 0
-      //  this.setAttenuation(1.0, 0.045, 0.0075);
+        if (options.attenuation) {
+            this.setAttenuation(this.attenuation[0], this.attenuation[1], this.attenuation[2]);
+        }
+        else {
+            this.setAttenuationByDistance(60);
+        }
         this.setOuterAngle(options.outer || tge.DEGTORAD * 50).setInnerAngle(options.inner || tge.DEGTORAD * 50);
         this.lightType = 2;
         this.shadowMapSize =512;
-        this.range = options.range || 30;
+        this.range = options.range || 20;
         return (this);
 
     }
@@ -4884,7 +4885,28 @@ tge.engine = $extend(function (proto) {
 
 
 
+        this.defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
+        this.defaultRenderTarget.clearBuffer = false;
 
+        this.postProcessTarget = new tge.rendertarget(gl, 10, 10, true);
+       // this.postProcessTarget.clearBuffer = false;
+
+
+        this.postProcessPipeline = [];
+
+        var pp1 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp1')?>"));
+        this.postProcessPipeline.push(function (engine) {           
+            return pp1
+        });
+
+        var pp2 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp2')?>"));
+        this.postProcessPipeline.push(function (engine) {
+            return pp2
+        });
+
+
+        this.tge_u_pipelineParams = tge.vec4();
+        
         gl.enable(gl.DEPTH_TEST);
         gl.cullFace(gl.BACK);
         gl.enable(gl.CULL_FACE);
@@ -4894,11 +4916,20 @@ tge.engine = $extend(function (proto) {
 
     }
 
+    engine.defaultPostProcessShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('defaultPostProcessShader')?>"));
+
+    engine.defaultPostProcessShader.process = function (engine) {
+        return tge.engine.defaultPostProcessShader;
+    };
 
     proto.setSize = function (width, height) {
         this.gl.canvas.width = width * this.gl.pixelRatio;
         this.gl.canvas.height = height * this.gl.pixelRatio;
         this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        
+        this.defaultRenderTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
+        this.postProcessTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
+
     };
 
 
@@ -4908,16 +4939,21 @@ tge.engine = $extend(function (proto) {
     };
 
     proto.setDefaultViewport = function () {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-        this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        this.defaultRenderTarget.bind();
+        //this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        //this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
         this.lastRenderTargetId = -1;
         return (this)
     };
 
     proto.useShader = function (shader) {
         if (this.lastShaderId != shader.uuid) {         
-            if (!shader.compiled) tge.shader.compile(this.gl, shader, this.shaderParameters);
+            if (!shader.compiled) {
+                
+                tge.shader.compile(this.gl, shader, this.shaderParameters);
+            }
             this.gl.useProgram(shader.program);
+            shader.setUniform("tge_u_pipelineParams", this.tge_u_pipelineParams);
             this.activeShader = shader;
             this.activeShader.cameraVersion = -1;
             this.lastShaderId = shader.uuid;
@@ -4926,16 +4962,11 @@ tge.engine = $extend(function (proto) {
         return (false);
     };
 
-    proto.useMaterial = function (material , shader) {
-        if (this.lastShaderId != shader.uuid) {
-            if (!shader.compiled) tge.shader.compile(this.gl, shader, this.shaderParameters);
-            this.gl.useProgram(shader.program);
-            this.activeShader = shader;
-            this.activeShader.cameraVersion = -1;
-            this.lastShaderId = shader.uuid;
+    proto.useMaterial = function (material, shader) {
+        if (this.useShader(shader)) {
             material.useShader(shader, this);
             return (true);
-        }
+        }      
         return (false);
     };
 
@@ -5131,17 +5162,22 @@ tge.engine = $extend(function (proto) {
         
 
         var castShadowMeshes = [], receiveShadowMeshes = [];
+        var castShadowLights = [];
 
 
         var updateShadingLights = false;
 
         var i1, i2, i3, i4;
         var light;
+
+
+
         proto.renderLighting = function (camera, lights, calback) {
             this.lightPassCount = 0;
             this.lightsBatchSize = 0;
             for (i1 = 0; i1 < lights.length; i1++) {
                 light = lights[i1];
+                if (light.castShadows) castShadowLights[castShadowLights.length] = light;
                 this.shadingLights[this.lightsBatchSize++] = light;
                 updateShadingLights = this.lightsBatchSize === this.shadingLightsCount || i1 === lights.length - 1;
                 if (updateShadingLights) {
@@ -5163,6 +5199,8 @@ tge.engine = $extend(function (proto) {
 
 
         var transparentMeshes = [], opuqueMeshes = [], flatMeshes = [], _this = null;
+
+        var currentCamera;
         function transparentMeshSortFunc(a, b) {
             return a.cameraDistance - b.cameraDistance;
         }
@@ -5175,20 +5213,35 @@ tge.engine = $extend(function (proto) {
 
 
 
-       
+        var allMeshes = {
+            castShadowMeshes: null,
+            receiveShadowMeshes: null,
+            transparentMeshes: null,
+            opuqueMeshes: null,
+            flatMeshes: null,
+        }
 
-        return function (camera, meshes, lights) {
-           
 
 
+        var postProcessOutput;
+        return function (camera, meshes, lights,cb) {
+
+            
             if (this.isError) {
                 return;
             }
+            currentCamera = camera;
+
+            castShadowLights.length = 0;
 
             time = performance.now();
             this.frameTimeDelta = this.frameTime - time;
             this.frameTime = time;
             this.lastShaderId = -1;
+
+
+            this.tge_u_pipelineParams[0] = this.frameTime;
+            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
 
             _this = this;
 
@@ -5324,21 +5377,86 @@ tge.engine = $extend(function (proto) {
             _this.disableFWRendering();
 
             this.lastShaderId = -1;
+
+            /*
             for (i1 = 0; i1 < lights.length; i1++) {
                 light = lights[i1];
                 if (light.castShadows) {
                     light.renderShadows(this, camera, castShadowMeshes, receiveShadowMeshes);
                 }
             }
+            */
+            allMeshes.castShadowMeshes = castShadowMeshes;
+            allMeshes.receiveShadowMeshes = receiveShadowMeshes;
+            allMeshes.transparentMeshes = transparentMeshes;
+            allMeshes.opuqueMeshes = opuqueMeshes;
+            allMeshes.flatMeshes = flatMeshes;
+
+            if (castShadowLights.length > 0) {
+                tge.light.castShadows(castShadowLights, this, camera, allMeshes);
+            }
+
+
+           
+            
+
+
+
+
+
+
+            if (cb) {
+              
+                cb(this, camera, lights, allMeshes);
+
+            }
+
+            postProcessOutput = this.defaultRenderTarget.colorTexture;
+
+            for (i1 = 0; i1 < this.postProcessPipeline.length; i1++) {
+                if (i1 % 2 === 0) {
+                    this.renderPostProcessQuad(this.postProcessPipeline[i1], this.postProcessTarget, postProcessOutput);
+                    postProcessOutput = this.postProcessTarget.colorTexture;
+                }
+                else {
+                    this.renderPostProcessQuad(this.postProcessPipeline[i1], this.defaultRenderTarget, postProcessOutput);
+                    postProcessOutput = this.defaultRenderTarget.colorTexture;
+                }
+            }
+
+            
+
+            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
 
 
 
             _this.textureSlots[0] = -1;
             _this.updateTextures();
+
+
         }
     })();
+    var fq = tge.geometry.quad2D();
+    proto.renderPostProcessQuad = (function () {
+        var shader;
+        return function (process, target, texture_input) {
 
+            if (target == null) {
+                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+                this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+            }
+            else {
+                target.bind();
+            }
+            shader = process(this);
 
+            if (this.lastShaderId !== shader.uuid) this.useShader(shader);
+            this.useGeometry(fq);
+            shader.setUniform("tge_u_texture_input", 0);
+            this.useTexture(texture_input, 0);
+            this.gl.drawArrays(4, 0, 6);
+        }
+    })();
     proto.renderFlatMeshes = function (camera, meshes) {
 
 
@@ -5674,7 +5792,7 @@ tge.demo = function (parameters, cb) {
 
 
 
-    var camera = new tge.perspective_camera(70, window.innerWidth / window.innerHeight, 0.1, 200);
+    var camera = new tge.perspective_camera(80, window.innerWidth / window.innerHeight, 0.1, 500);
     console.log(camera);
     app.mouseDrage = function (dx, dy, e) {
         camera.moveLeftRight(-dx * 0.1);

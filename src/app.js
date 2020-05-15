@@ -133,7 +133,7 @@ tge.demo = function (parameters, cb) {
 
 
 
-    var camera = new tge.perspective_camera(70, window.innerWidth / window.innerHeight, 0.1, 200);
+    var camera = new tge.perspective_camera(80, window.innerWidth / window.innerHeight, 0.1, 500);
     console.log(camera);
     app.mouseDrage = function (dx, dy, e) {
         camera.moveLeftRight(-dx * 0.1);

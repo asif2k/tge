@@ -151,6 +151,19 @@ tge.ortho_camera = $extend(function (proto, _super) {
         this.version++;
     };
 
+    proto.setOrthoProjection = function (left, right, bottom, top, near, far) {
+        this.left = left;
+        this.right = right;
+        this.bottom = bottom;
+        this.top = top;
+        this.near = near;
+        this.far = far;
+
+        this.aspect = Math.abs((this.right - this.left) / (this.top - this.bottom));
+        tge.mat4.ortho(this.matrixProjection, this.left, this.right, this.bottom, this.top, this.near, this.far);
+        return this;
+    };
+
     return ortho_camera;
 
 }, tge.camera);

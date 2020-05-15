@@ -349,6 +349,27 @@ tge.geometry = $extend(function (proto) {
     })();
 
 
+    geometry.quad2D = function () {
+        var g = new geometry();
+        g.addAttribute("tge_a_position", {
+            data: new Float32Array([
+                -1, -1,
+                1, -1,
+               1, 1,
+
+                -1, -1,
+                1, 1,
+                -1, 1,
+               
+            ]),
+            itemSize: 2, offset: 0
+        });
+        g.numItems =4;        
+        g.geoType = "quad2d";
+        return (g);
+    };
+
+
     geometry.quad = function () {
         var g = new geometry();
         g.addAttribute("tge_a_position", {

@@ -1,0 +1,100 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>   
+</head>
+<body>
+  <input type="range" value="10" min="10" max="3000" id="attvalue" style="position:absolute;left:30px;top:10px;width:90%;z-index:9999" />
+  <script src="../tge.js"></script>
+ 
+  <script>
+
+    tge.demo({ fws_lightsCount:8}, function (app, engine, scene, camera) {
+      var light0 = scene.addLight(new tge.light(), function (lg) {
+        lg.setPosition(0, 5, 0);
+        lg.setDiffuse(0.5, 0.5, 0.5);
+        lg.setAmbient(0.338, 0.338, 0.338).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
+        lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
+        lg.shadowMapSize = 2048;
+        lg.shadowCameraDistance = 20;
+        //lg.castShadows = true;     
+       // lg.enabled = false;
+        scene.addModel(lg.getDisplay());
+
+      });
+
+      
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+        md.setPosition(0, -0.5, 0);
+        mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0,64, 64, 0);
+
+        tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0, 32, 32, 0);
+        mesh.material.normalMap = tge.texture.from_url('textures/norm2.jpg');
+        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW); //.setAmbientRandom();
+        mesh.material.ambientTexture = tge.texture.from_url('textures/tex1.jpg');
+        md.setRotation(-90 * tge.DEGTORAD, 0, 0);
+      });
+
+      scene.createRandomModelsGrid(150, 50, function (md) {        
+        md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
+
+
+
+        scene.addLight(new tge.point_light(), function (lg) {
+          lg.setPosition(2, 4, 0);
+          lg.setDiffuse(0.5, 0.5, 0.5);
+          lg.setAmbient(0.3, 0.3, 0.3).setSpecular(0.75, 0.75, 0.75).setIntensity(5);
+          lg.setAttenuationByDistance(57);
+          lg.setRotation(-90 * tge.DEGTORAD, 0, 0);
+          lg.parent = md;
+         // lg.castShadows = true;
+         // scene.addModel(lg.getDisplay());
+
+        });
+
+
+      }, tge.phong_material);
+
+
+      app.mouseDrage2 = (function (base) {
+        return function (dx, dy, e) {
+          if (!e.ctrlKey) return base.apply(this, arguments);
+          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
+        }
+      })(app.mouseDrage2);
+
+
+      document.getElementById("attvalue").oninput = function () {
+        console.log(this.value);
+        for (var i = 0; i < scene.lights.length; i++) {
+          if (scene.lights[i].setAttenuationByDistance) {
+            scene.lights[i].setAttenuationByDistance(this.value)
+          }
+        }
+      };
+
+      camera.setPosition(-0.02603265456855297, 4.681277275085449, 11.607051849365234);
+
+
+            app.playLoop(function (delta, time) {
+        if (light0.version < 10) light0.version++;
+        if (camera.update()) {
+          scene.renderList.meshes.sorted = false;
+        }
+        scene.updateRenderList(camera);
+
+        engine.setDefaultViewport().clearScreen();
+        engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
+
+
+      }, 16);
+
+    });
+
+
+  </script>
+
+</body>
+</html>

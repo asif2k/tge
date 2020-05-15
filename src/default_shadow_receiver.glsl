@@ -24,6 +24,18 @@ float getShadowSampleVariance( mat4 lightMatrix) {
 
 }
 
+float getShadowSample( mat4 lightMatrix) {
+	vec4 projCoords = lightMatrix * tge_v_shadow_vertex;
+	 float shadowmap_size=tge_u_shadow_params.z;
+	float shadow_bias=tge_u_shadow_params.x;
+	projCoords.xyz = projCoords.xyz / projCoords.w;
+	projCoords.xyz = projCoords.xyz * 0.5 + 0.5;
+	if (projCoords.y > 1.0 || projCoords.x > 1.0 || projCoords.z > 1.0) return (0.0);
+    if (projCoords.y < 0.0 || projCoords.x < 0.0 || projCoords.z < 0.0) return (0.0);
+	float bias = projCoords.z - (1.0/shadowmap_size) * shadow_bias;
+	float d = texture2D(tge_u_shadowMap, projCoords.xy).r;
+	return bias > d ? 0.5 : 0.0;
+}
 
 void fragment(){
     float shadowOpacity  =tge_u_shadow_params.y;
