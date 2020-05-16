@@ -211,15 +211,63 @@ void fragment(){
 }
 
 /*chunk-pp2*/
-void fragment(){
-	super_fragment();
-	if(tge_v_uv.x<0.25){
-		gl_FragColor.z+=0.3*sin(tge_u_frameTime);
-		gl_FragColor.y+=0.1*cos(tge_u_frameTime);
+float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare)
+{
+	return step(compare, texture2D(shadowMap, coords.xy).r);
+}
+float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
+{
+	vec2 pixelPos = coords/texelSize + vec2(0.5);
+	vec2 fracPart = fract(pixelPos);
+	vec2 startTexel = (pixelPos - fracPart) * texelSize;
+	
+	float blTexel = SampleShadowMap(shadowMap, startTexel, compare);
+	float brTexel = SampleShadowMap(shadowMap, startTexel + vec2(texelSize.x, 0.0), compare);
+	float tlTexel = SampleShadowMap(shadowMap, startTexel + vec2(0.0, texelSize.y), compare);
+	float trTexel = SampleShadowMap(shadowMap, startTexel + texelSize, compare);
+	
+	float mixA = mix(blTexel, tlTexel, fracPart.y);
+	float mixB = mix(brTexel, trTexel, fracPart.y);
+	
+	return mix(mixA, mixB, fracPart.x);
+}
+float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
+{
+	const float NUM_SAMPLES = 3.0;
+	const float SAMPLES_START = (NUM_SAMPLES-1.0)/2.0;
+	const float NUM_SAMPLES_SQUARED = NUM_SAMPLES*NUM_SAMPLES;
+
+	float result = 0.0;
+	for(float y = -SAMPLES_START; y <= SAMPLES_START; y += 1.0)
+	{
+		for(float x = -SAMPLES_START; x <= SAMPLES_START; x += 1.0)
+		{
+			vec2 coordsOffset = vec2(x,y)*texelSize;
+			result += SampleShadowMapLinear(shadowMap, coords + coordsOffset, compare, texelSize);
+		}
 	}
+	return result/NUM_SAMPLES_SQUARED;
+}
+
+/*chunk-variance-shadow-sampling*/
+
+float linstep(float low, float high, float v)
+{
+	return clamp((v - low) / (high - low), 0.0, 1.0);
 }
 
 
+float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, float varianceMin, float lightBleedReductionAmount)
+{
+	vec2 moments = texture2D(shadowMap, coords.xy).xy;	
+	float p = step(compare, moments.x);
+	float variance = max(moments.y - moments.x * moments.x, varianceMin);
+	
+	float d = compare - moments.x;
+	float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d*d));
+	
+	return min(max(p, pMax), 1.0);
+}
 
 /*chunk-defaultPostProcessShader*/
 <?=chunk('precision')?>
@@ -246,4 +294,116 @@ varying vec2 tge_v_uv;
 void fragment(void) {
 	initPipelineParams();	
 	gl_FragColor = texture2D(tge_u_texture_input, tge_v_uv) ;	
+}
+
+
+
+/*chunk-variance-shadow-map-render*/
+<?=chunk('precision')?>
+
+void fragment(void) {
+	float depth = gl_FragCoord.z;
+	float dx = dFdx(depth);
+	float dy = dFdy(depth);
+	float moment2 = depth * depth + 0.25 * (dx * dx + dy * dy);
+	gl_FragColor = vec4(depth, moment2, 0.0, 0.0);
+}
+
+/*chunk-variance-cascade-shadow-receiver*/
+
+<?for(var i = 0;i <param('count');i++){?>
+	uniform mat4 tge_u_lightCameraMatrix<?=i?>;
+	varying vec4 tge_v_shadow_light_vertex<?=i?>;	
+<?}?>
+
+void vertex(){
+	super_vertex();
+
+	<?for(var i = 0;i <param('count');i++){?>
+	tge_v_shadow_light_vertex<?=i?> = tge_u_lightCameraMatrix<?=i?> * tge_v_shadow_vertex;
+		
+	<?}?>
+	
+}
+
+<?=chunk('precision')?>
+<?=chunk('variance-shadow-sampling')?>
+
+<?for(var i = 0;i <param('count');i++){?>	
+	varying vec4 tge_v_shadow_light_vertex<?=i?>;	
+<?}?>
+
+
+uniform sampler2D tge_u_shadowMap;
+uniform vec4 tge_u_shadow_params;
+
+float vpSize=<?=(1/param('count')).toFixed(3)?>;
+
+
+float bias = 0.0;
+
+float getShadowSample(float i,vec4 shadow_light_vertex,float s) {
+
+if(s>0.0) return s;
+	vec3 shadowMapCoords = (shadow_light_vertex.xyz/shadow_light_vertex.w);	
+
+
+	shadow_light_vertex.xyz = shadow_light_vertex.xyz * 0.5 + 0.5;
+
+	shadowMapCoords.y *= vpSize;
+	shadowMapCoords.y += i * vpSize;
+
+
+	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
+	if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+	
+   
+   return 0.2- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+    0.000000005,0.000000);
+		
+}
+
+
+void fragment(void) {	
+float s=0.0;
+bias= (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x;
+<?for(var i =param('count')-1;i>-1;i--){?>	
+	s=getShadowSample(<?=(i.toFixed(2))?>,tge_v_shadow_light_vertex<?=i?>,s);
+<?}?>
+
+ gl_FragColor = vec4(tge_u_shadow_params.y)* s;
+}
+
+
+
+
+/*chunk-variance-shadow-receiver*/
+
+uniform mat4 tge_u_lightCameraMatrix;
+varying vec4 tge_v_shadow_light_vertex;
+void vertex(){
+	super_vertex();
+	tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+	tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;	
+}
+
+<?=chunk('precision')?>
+<?=chunk('variance-shadow-sampling')?>
+varying vec4 tge_v_shadow_light_vertex;
+uniform sampler2D tge_u_shadowMap;
+uniform vec4 tge_u_shadow_params;
+
+float getShadowSample() {
+	vec3 shadowMapCoords = (tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w);	
+	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
+	  if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+    float bias =  (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x ;
+   return 0.15- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+    0.000000005,0.000000);
+		
+}
+
+
+void fragment(void) {	
+	gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
 }

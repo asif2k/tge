@@ -9,6 +9,7 @@ tge.shader = $extend(function (proto) {
         this.fs = fs;
         this.compiled = false;
         this.uuid = $guidi();
+        this.params = {};
         return (this);
 
     }
@@ -151,8 +152,12 @@ tge.shader = $extend(function (proto) {
         return function (gl, shdr, _params) {
 
             if (shdr.compiled) return;
-            tge.shader.context_param = _params;
+            tge.shader.context_param = {}
 
+            
+            $assign(tge.shader.context_param, _params);
+
+            $assign(tge.shader.context_param, shdr.params);
 
             shdr.vs =tge.shader.$str(shdr.vs,true);
             shdr.fs = tge.shader.$str(shdr.fs,true);

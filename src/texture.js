@@ -189,7 +189,7 @@ tge.rendertarget = $extend(function (proto,_super) {
 
 
 
-    proto.getColorDisplay = function (callback, depth) {
+    proto.getColorDisplay = function (depth, callback) {
         var display = new tge.model(tge.geometry.plane({ width: 1, height: this.colorTexture.height / this.colorTexture.width, divs: 1 }));
         display.meshes[0].material.ambientTexture = this.colorTexture;
 
@@ -263,7 +263,7 @@ tge.rendertarget = $extend(function (proto,_super) {
             this.depthTexture.targetId = this.uuid;
 
           //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
-          //  this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
+           // this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
 
         }
         this.vpLeft = 0;

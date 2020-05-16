@@ -680,6 +680,7 @@ tge.engine = $extend(function (proto) {
 
             postProcessOutput = this.defaultRenderTarget.colorTexture;
 
+            /*
             for (i1 = 0; i1 < this.postProcessPipeline.length; i1++) {
                 if (i1 % 2 === 0) {
                     this.renderPostProcessQuad(this.postProcessPipeline[i1], this.postProcessTarget, postProcessOutput);
@@ -690,7 +691,7 @@ tge.engine = $extend(function (proto) {
                     postProcessOutput = this.defaultRenderTarget.colorTexture;
                 }
             }
-
+            */
             
 
             this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
