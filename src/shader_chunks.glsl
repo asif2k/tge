@@ -6,6 +6,7 @@
     precision mediump float;
 #endif
 
+
 /*chunk-common-varying*/
 varying vec4 tge_v_unprojected_vertex;
 
@@ -309,6 +310,13 @@ void fragment(void) {
 	gl_FragColor = vec4(depth, moment2, 0.0, 0.0);
 }
 
+/*chunk-normal-shadow-map-render*/
+<?=chunk('precision')?>
+
+void fragment(void) {	
+	gl_FragColor = vec4(1.0);
+}
+
 /*chunk-variance-cascade-shadow-receiver*/
 
 <?for(var i = 0;i <param('count');i++){?>
@@ -379,27 +387,125 @@ bias= (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x;
 
 /*chunk-variance-shadow-receiver*/
 
-uniform mat4 tge_u_lightCameraMatrix;
-varying vec4 tge_v_shadow_light_vertex;
+
+
 void vertex(){
 	super_vertex();
+	
+	/*
+	varying vec4 tge_v_shadow_light_vertex;
 	tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
 	tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;	
+	tge_v_shadow_light_vertex.xyz/=tge_v_shadow_light_vertex.w;
+	*/
 }
 
 <?=chunk('precision')?>
 <?=chunk('variance-shadow-sampling')?>
-varying vec4 tge_v_shadow_light_vertex;
+
+uniform mat4 tge_u_lightCameraMatrix;
+ vec4 tge_v_shadow_light_vertex;
+varying vec4 tge_v_shadow_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
+varying vec3 tge_v_normal;
+uniform vec3 tge_u_light_dir;
 
-float getShadowSample() {
-	vec3 shadowMapCoords = (tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w);	
+
+float getShadowSample1() {
+
+	tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+	vec3 shadowMapCoords =tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w;
+	shadowMapCoords.xyz = shadowMapCoords.xyz * 0.5 + 0.5;
 	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
 	  if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
     float bias =  (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x ;
-   return 0.15- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
-    0.000000005,0.000000);
+   return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+    0.0000005,0.00003);
+		
+}
+
+float getShadowSample() {
+vec3 fws_directionToEye = normalize(tge_u_light_dir.xyz - tge_v_shadow_vertex.xyz);
+
+fws_directionToEye=normalize(tge_u_light_dir);
+	tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+	vec3 shadowMapCoords =tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w;
+	shadowMapCoords.xyz = shadowMapCoords.xyz * 0.5 + 0.5;
+	
+	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
+	  if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+	/*
+	if (length(shadowMapCoords)> 1.0 || length(shadowMapCoords) < 0.0) return (0.0);  
+	
+	  */
+	  float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
+	  
+	 float bias=clamp(dot(tge_v_normal,fws_directionToEye), 0.0005, 0.005);
+
+	  bias=normalize(bias);
+	
+	 bias=-(dot(tge_v_normal,fws_directionToEye));
+	 if(bias>0.0) return 0.0;
+
+	 bias=0.0001;
+	
+	
+	  return d > shadowMapCoords.z-0.0001  ? 0.0 : 0.5;
+		
+}
+
+
+void fragment(void) {	
+	gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
+}
+
+
+
+
+
+
+
+
+
+
+/*chunk-directional-light-shadow-receiver*/
+uniform mat4 tge_u_lightCameraMatrix;
+varying vec4 tge_v_shadow_light_vertex;
+
+void vertex(){
+	super_vertex();
+	
+	tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;	
+	tge_v_shadow_light_vertex.xyz/=tge_v_shadow_light_vertex.w;
+	tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;	
+
+}
+
+
+<?=chunk('precision')?>
+<?=chunk('variance-shadow-sampling')?>
+
+
+varying vec3 tge_v_normal;
+varying vec4 tge_v_shadow_light_vertex;
+
+uniform sampler2D tge_u_shadowMap;
+uniform vec4 tge_u_shadow_params;
+uniform vec3 tge_u_light_dir;
+
+float getShadowSample() {	
+	if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;
+	vec3 shadowMapCoords=tge_v_shadow_light_vertex.xyz;	
+	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
+	if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+	
+	float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
+
+		
+
+
+	return d > shadowMapCoords.z-0.0001  ? 0.0 : 0.5;
 		
 }
 

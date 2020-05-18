@@ -227,7 +227,7 @@ tge.light = $extend(function (proto, _super) {
 
     proto.getShadowReceiverShader = function (shader) {
         if (!shader.variance_shadow_receiver) {
-            shader.variance_shadow_receiver = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('variance-shadow-receiver')?>"), shader, true);
+            shader.variance_shadow_receiver = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('directional-light-shadow-receiver')?>"), shader, true);
             shader.variance_shadow_receiver.shadowShader = true;
         }
         return shader.variance_shadow_receiver;
@@ -259,7 +259,7 @@ tge.light = $extend(function (proto, _super) {
                 if (!light.validShadowCaster(light_camera, mesh.model)) continue;
                 castCount++;
                 if (!mesh.material.shader.depthShader) {
-                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('variance-shadow-map-render')?>"), mesh.material.shader, true);
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
                     mesh.material.shader.depthShader.shadowShader = true;
                 }
                 engine.useMaterial(mesh.material, mesh.material.shader.depthShader);
@@ -277,12 +277,14 @@ tge.light = $extend(function (proto, _super) {
 
         }
 
+        var worldPosition = tge.vec3();
         function renderShadowReceivers(engine, light,light_camera,camera, receiveShadowMeshes) {
            
             tge_u_shadow_params[0] = light.shadowBias;
             tge_u_shadow_params[1] = light.shadowOpacity
             tge_u_shadow_params[2] = light.shadowMapSize;            
-           
+            tge.vec3.set(worldPosition, light.fwVector[0] * 200, light.fwVector[1] * 200, light.fwVector[2] * 200);
+
             for (i = 0; i < receiveShadowMeshes.length; i++) {
                 mesh = receiveShadowMeshes[i];
                 if (engine.useMaterial(mesh.material, light.getShadowReceiverShader(mesh.material.shader))) {
@@ -290,6 +292,7 @@ tge.light = $extend(function (proto, _super) {
                     engine.activeShader.setUniform("tge_u_shadowMap", 1);
                     engine.useTexture(shadow_map.depthTexture, 1);
                     engine.activeShader.setUniform("tge_u_lightCameraMatrix", light_camera.matrixWorldProjection);
+                    engine.activeShader.setUniform("tge_u_light_dir", light.fwVector);
                 };
 
                 engine.updateCameraUniforms(camera);

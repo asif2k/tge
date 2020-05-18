@@ -2533,6 +2533,7 @@ precision highp float;
 precision mediump float;
 #endif
 
+
 /*chunk-common-varying*/
 varying vec4 tge_v_unprojected_vertex;
 
@@ -2836,6 +2837,13 @@ float moment2 = depth * depth + 0.25 * (dx * dx + dy * dy);
 gl_FragColor = vec4(depth, moment2, 0.0, 0.0);
 }
 
+/*chunk-normal-shadow-map-render*/
+<?=chunk('precision')?>
+
+void fragment(void) {
+gl_FragColor = vec4(1.0);
+}
+
 /*chunk-variance-cascade-shadow-receiver*/
 
 <?for(var i = 0;i <param('count');i++){?>
@@ -2906,27 +2914,125 @@ s=getShadowSample(<?=(i.toFixed(2))?>,tge_v_shadow_light_vertex<?=i?>,s);
 
 /*chunk-variance-shadow-receiver*/
 
-uniform mat4 tge_u_lightCameraMatrix;
-varying vec4 tge_v_shadow_light_vertex;
+
+
 void vertex(){
 super_vertex();
+
+/*
+varying vec4 tge_v_shadow_light_vertex;
 tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
 tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;
+tge_v_shadow_light_vertex.xyz/=tge_v_shadow_light_vertex.w;
+*/
 }
 
 <?=chunk('precision')?>
 <?=chunk('variance-shadow-sampling')?>
-varying vec4 tge_v_shadow_light_vertex;
+
+uniform mat4 tge_u_lightCameraMatrix;
+ vec4 tge_v_shadow_light_vertex;
+varying vec4 tge_v_shadow_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
+varying vec3 tge_v_normal;
+uniform vec3 tge_u_light_dir;
 
-float getShadowSample() {
-vec3 shadowMapCoords = (tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w);
+
+float getShadowSample1() {
+
+tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+vec3 shadowMapCoords =tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w;
+shadowMapCoords.xyz = shadowMapCoords.xyz * 0.5 + 0.5;
 if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);
 if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
 float bias =(1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x ;
- return 0.15- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
-0.000000005,0.000000);
+ return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+0.0000005,0.00003);
+
+}
+
+float getShadowSample() {
+vec3 fws_directionToEye = normalize(tge_u_light_dir.xyz - tge_v_shadow_vertex.xyz);
+
+fws_directionToEye=normalize(tge_u_light_dir);
+tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+vec3 shadowMapCoords =tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w;
+shadowMapCoords.xyz = shadowMapCoords.xyz * 0.5 + 0.5;
+
+if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);
+if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+/*
+if (length(shadowMapCoords)> 1.0 || length(shadowMapCoords) < 0.0) return (0.0);
+
+*/
+float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
+
+ float bias=clamp(dot(tge_v_normal,fws_directionToEye), 0.0005, 0.005);
+
+bias=normalize(bias);
+
+ bias=-(dot(tge_v_normal,fws_directionToEye));
+ if(bias>0.0) return 0.0;
+
+ bias=0.0001;
+
+
+return d > shadowMapCoords.z-0.0001? 0.0 : 0.5;
+
+}
+
+
+void fragment(void) {
+gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
+}
+
+
+
+
+
+
+
+
+
+
+/*chunk-directional-light-shadow-receiver*/
+uniform mat4 tge_u_lightCameraMatrix;
+varying vec4 tge_v_shadow_light_vertex;
+
+void vertex(){
+super_vertex();
+
+tge_v_shadow_light_vertex = tge_u_lightCameraMatrix * tge_v_shadow_vertex;
+tge_v_shadow_light_vertex.xyz/=tge_v_shadow_light_vertex.w;
+tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;
+
+}
+
+
+<?=chunk('precision')?>
+<?=chunk('variance-shadow-sampling')?>
+
+
+varying vec3 tge_v_normal;
+varying vec4 tge_v_shadow_light_vertex;
+
+uniform sampler2D tge_u_shadowMap;
+uniform vec4 tge_u_shadow_params;
+uniform vec3 tge_u_light_dir;
+
+float getShadowSample() {
+if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;
+vec3 shadowMapCoords=tge_v_shadow_light_vertex.xyz;
+if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);
+if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+
+float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
+
+
+
+
+return d > shadowMapCoords.z-0.0001? 0.0 : 0.5;
 
 }
 
@@ -3528,6 +3634,9 @@ tge.rendertarget = $extend(function (proto,_super) {
           //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
            // this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
 
+            this.depthTexture.P("TEXTURE_WRAP_S", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
+            this.depthTexture.P("TEXTURE_WRAP_T", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
+
         }
         this.vpLeft = 0;
         this.vpTop = 0;
@@ -3863,7 +3972,7 @@ tge.parallax_material = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.shader = tge.parallax_material.shader;
-        this.dispMapScale = 1;
+        this.dispMapScale = 0.2;
         this.dispMapOffset = -1;
         this.normalMapMatrix = tge.mat3();
         $merge(options, this);
@@ -4510,7 +4619,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
 
     proto.getShadowReceiverShader = function (shader) {
         if (!shader.variance_shadow_receiver) {
-            shader.variance_shadow_receiver = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('variance-shadow-receiver')?>"), shader, true);
+            shader.variance_shadow_receiver = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('directional-light-shadow-receiver')?>"), shader, true);
             shader.variance_shadow_receiver.shadowShader = true;
         }
         return shader.variance_shadow_receiver;
@@ -4542,7 +4651,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
                 if (!light.validShadowCaster(light_camera, mesh.model)) continue;
                 castCount++;
                 if (!mesh.material.shader.depthShader) {
-                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('variance-shadow-map-render')?>"), mesh.material.shader, true);
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
                     mesh.material.shader.depthShader.shadowShader = true;
                 }
                 engine.useMaterial(mesh.material, mesh.material.shader.depthShader);
@@ -4560,12 +4669,14 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
 
         }
 
+        var worldPosition = tge.vec3();
         function renderShadowReceivers(engine, light,light_camera,camera, receiveShadowMeshes) {
            
             tge_u_shadow_params[0] = light.shadowBias;
             tge_u_shadow_params[1] = light.shadowOpacity
             tge_u_shadow_params[2] = light.shadowMapSize;            
-           
+            tge.vec3.set(worldPosition, light.fwVector[0] * 200, light.fwVector[1] * 200, light.fwVector[2] * 200);
+
             for (i = 0; i < receiveShadowMeshes.length; i++) {
                 mesh = receiveShadowMeshes[i];
                 if (engine.useMaterial(mesh.material, light.getShadowReceiverShader(mesh.material.shader))) {
@@ -4573,6 +4684,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
                     engine.activeShader.setUniform("tge_u_shadowMap", 1);
                     engine.useTexture(shadow_map.depthTexture, 1);
                     engine.activeShader.setUniform("tge_u_lightCameraMatrix", light_camera.matrixWorldProjection);
+                    engine.activeShader.setUniform("tge_u_light_dir", light.fwVector);
                 };
 
                 engine.updateCameraUniforms(camera);

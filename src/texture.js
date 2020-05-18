@@ -265,6 +265,9 @@ tge.rendertarget = $extend(function (proto,_super) {
           //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
            // this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
 
+            this.depthTexture.P("TEXTURE_WRAP_S", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
+            this.depthTexture.P("TEXTURE_WRAP_T", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
+
         }
         this.vpLeft = 0;
         this.vpTop = 0;
