@@ -3046,7 +3046,7 @@ if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.
 
 
 
-return texture2D(tge_u_shadowMap, shadowMapCoords.xy).r> shadowMapCoords.z-0.0001? 0.0 : 0.5;
+//return texture2D(tge_u_shadowMap, shadowMapCoords.xy).r> shadowMapCoords.z-0.0001? 0.0 : 0.5;
 return 0.5-SampleShadowMapPCF(tge_u_shadowMap, shadowMapCoords.xy,shadowMapCoords.z,vec2(1.0/1024.0));
 
 return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
@@ -3065,20 +3065,118 @@ return d > shadowMapCoords.z-0.0001? 0.0 : 0.5;
 
 void fragment(void) {
 
+if(texture2D(tge_u_ambientTexture, tge_v_uv).w<0.0002) discard;
+gl_FragColor = vec4(0.25*getShadowSample());
 
-gl_FragColor = vec4(0.65)*(0.5-getShadowSample());
-gl_FragColor.w *= tge_u_objectMaterial[0].w;
-
+//gl_FragColor.w *= tge_u_objectMaterial[0].w*texture2D(tge_u_ambientTexture, tge_v_uv).w;
 }
 
 
 /*chunk-shadow-post-process*/
-void fragment(){
-super_fragment();
-if(tge_v_uv.x>0.5){
 
-
+vec4 Sample( vec2 coords)
+{
+return texture2D(tge_u_texture_input, coords);
 }
+
+vec4 mix4(vec4 a,vec4 b,float f){
+ return vec4(
+mix(a.r, b.r, f),
+mix(a.g, b.g, f),
+mix(a.b, b.b, f),
+mix(a.a, b.a, f)
+);
+}
+
+vec4 SampleShadowMapLinear(vec2 coords,vec2 texelSize)
+{
+vec2 pixelPos = coords/texelSize + vec2(0.5);
+vec2 fracPart = fract(pixelPos);
+vec2 startTexel = (pixelPos - fracPart) * texelSize;
+
+vec4 blTexel = Sample(startTexel);
+vec4 brTexel = Sample(startTexel + vec2(texelSize.x, 0.0));
+vec4 tlTexel = Sample(startTexel + vec2(0.0, texelSize.y));
+vec4 trTexel = Sample(startTexel + texelSize);
+
+vec4 mixA = mix4(blTexel, tlTexel, fracPart.y);
+vec4 mixB = mix4(brTexel, trTexel, fracPart.y);
+
+
+return mix4(mixA, mixB, fracPart.x);
+}
+
+vec4 SampleShadowMapPCF( vec2 coords,vec2 texelSize)
+{
+const float NUM_SAMPLES = 3.0;
+const float SAMPLES_START = (NUM_SAMPLES-1.0)/2.0;
+const float NUM_SAMPLES_SQUARED = NUM_SAMPLES*NUM_SAMPLES;
+
+vec4 result = vec4(0.0);
+for(float y = -SAMPLES_START; y <= SAMPLES_START; y += 1.0)
+{
+for(float x = -SAMPLES_START; x <= SAMPLES_START; x += 1.0)
+{
+vec2 coordsOffset = vec2(x,y)*texelSize;
+result += SampleShadowMapLinear(coords + coordsOffset, texelSize);
+}
+}
+return result/NUM_SAMPLES_SQUARED;
+}
+
+
+
+void fxaa(sampler2D R_filterTexture,vec2 texCoord0)
+{
+
+
+float R_fxaaSpanMax=8.0;
+float R_fxaaReduceMin=1.0/128.0;
+float R_fxaaReduceMul=1.0/8.0;
+
+vec2 texCoordOffset = vec2(1.0);
+
+
+
+
+vec3 luma = vec3(0.299, 0.587, 0.114);
+float lumaTL = dot(luma, texture2D(R_filterTexture, texCoord0.xy + (vec2(-1.0, -1.0) * texCoordOffset)).xyz);
+float lumaTR = dot(luma, texture2D(R_filterTexture, texCoord0.xy + (vec2(1.0, -1.0) * texCoordOffset)).xyz);
+float lumaBL = dot(luma, texture2D(R_filterTexture, texCoord0.xy + (vec2(-1.0, 1.0) * texCoordOffset)).xyz);
+float lumaBR = dot(luma, texture2D(R_filterTexture, texCoord0.xy + (vec2(1.0, 1.0) * texCoordOffset)).xyz);
+float lumaM= dot(luma, texture2D(R_filterTexture, texCoord0.xy).xyz);
+
+vec2 dir;
+dir.x = -((lumaTL + lumaTR) - (lumaBL + lumaBR));
+dir.y = ((lumaTL + lumaBL) - (lumaTR + lumaBR));
+
+float dirReduce = max((lumaTL + lumaTR + lumaBL + lumaBR) * (R_fxaaReduceMul * 0.25), R_fxaaReduceMin);
+float inverseDirAdjustment = 1.0/(min(abs(dir.x), abs(dir.y)) + dirReduce);
+
+dir = min(vec2(R_fxaaSpanMax, R_fxaaSpanMax), 
+max(vec2(-R_fxaaSpanMax, -R_fxaaSpanMax), dir * inverseDirAdjustment)) * texCoordOffset;
+
+vec3 result1 = (1.0/2.0) * (
+texture2D(R_filterTexture, texCoord0.xy + (dir * vec2(1.0/3.0 - 0.5))).xyz +
+texture2D(R_filterTexture, texCoord0.xy + (dir * vec2(2.0/3.0 - 0.5))).xyz);
+
+vec3 result2 = result1 * (1.0/2.0) + (1.0/4.0) * (
+texture2D(R_filterTexture, texCoord0.xy + (dir * vec2(0.0/3.0 - 0.5))).xyz +
+texture2D(R_filterTexture, texCoord0.xy + (dir * vec2(3.0/3.0 - 0.5))).xyz);
+
+float lumaMin = min(lumaM, min(min(lumaTL, lumaTR), min(lumaBL, lumaBR)));
+float lumaMax = max(lumaM, max(max(lumaTL, lumaTR), max(lumaBL, lumaBR)));
+float lumaResult2 = dot(luma, result2);
+
+if(lumaResult2 < lumaMin || lumaResult2 > lumaMax)
+gl_FragColor = vec4(result1, 1.0);
+else
+gl_FragColor = vec4(result2, 1.0);
+}
+void fragment(){
+//gl_FragColor =SampleShadowMapLinear(tge_v_uv,vec2(1.0/2435.0,1.0/1907.0));
+
+fxaa(tge_u_texture_input,tge_v_uv);
 }
 `);
     
@@ -4662,16 +4760,17 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
 
            
             if (fwdRendering) engine.enableFWRendering();
-        //     engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);            
+            //engine.gl.enable(engine.gl.BLEND);
+            //engine.gl.blendFunc(engine.gl.ONE, engine.gl.ONE);
+             engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);            
             renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, opuqueMeshes);                        
-            engine.gl.enable(engine.gl.BLEND);
-            engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
-          //   renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, transparentMeshes);
-            //engine.gl.blendEquation(engine.gl.FUNC_ADD);
-            if (fwdRendering)
-                engine.disableFWRendering();
-            else
-                engine.gl.disable(engine.gl.BLEND);
+           
+          //  engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+            engine.gl.depthFunc(engine.gl.LESS);
+             renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, transparentMeshes);
+           engine.gl.blendEquation(engine.gl.FUNC_ADD);
+            if (fwdRendering) engine.disableFWRendering();
+            
 
             
             light.shadowMap.display.setPosition(0, 0, -2);
@@ -5800,14 +5899,16 @@ tge.engine = $extend(function (proto) {
 
             }
 
-
-
             this.postProcessTarget.display.setPosition(0, 0, -2);
             this.postProcessTarget.display.parent = camera;
             this.postProcessTarget.display.update();
-            this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+           // this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
 
-
+           // renderShadowDepth(camera, transparentMeshes);     
+          //  this.gl.clearColor(0, 0, 0, 0);
+          //  this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+          //  this.gl.clearColor(0, 0, 0, 1);
+            
             if (opuqueMeshes.length > 0) {
                 _this.renderLighting(camera, lights, function (updateShadingLights) {
                     for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
@@ -5842,15 +5943,15 @@ tge.engine = $extend(function (proto) {
                 _this.renderMesh(mesh);
             }
 
-            // _this.enableFWRendering();
-            _this.gl.enable(_this.gl.BLEND);
-            _this.gl.blendFunc(_this.gl.ONE_MINUS_SRC_COLOR, _this.gl.ONE_MINUS_SRC_COLOR);
-          //  _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
-            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
-           // _this.gl.blendEquation(_this.gl.FUNC_ADD);
-            _this.gl.disable(_this.gl.BLEND);
-           // _this.disableFWRendering();
-            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+
+            
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, true);
+
+            }
+
+        
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];
 
@@ -5895,26 +5996,33 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-            this.defaultRenderTarget = this.postProcessTarget;
-            this.setDefaultViewport().clearScreen();
-            for (i4 = 0; i4 < lights.length; i4++) {
-                light = lights[i4];
-                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, i4 > 0 ? true : false);
-
-            }
+          //  this.defaultRenderTarget = this.postProcessTarget;
+          //  this.setDefaultViewport().clearScreen();
+           
 
 
           
 
-            this.defaultRenderTarget = this._defaultRenderTarget;
-
-
-
+         //   this.defaultRenderTarget = this._defaultRenderTarget;
+            /*
+            // _this.enableFWRendering();
+            _this.gl.enable(_this.gl.BLEND);
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+             // _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
+            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
+            // _this.gl.blendEquation(_this.gl.FUNC_ADD);
+            _this.gl.disable(_this.gl.BLEND);
+            // _this.disableFWRendering();
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+            */
             
 
             postProcessOutput = this.defaultRenderTarget.colorTexture;
+
+
             this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
 
+           
 
             _this.textureSlots[0] = -1;
             _this.updateTextures();

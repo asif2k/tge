@@ -575,14 +575,16 @@ tge.engine = $extend(function (proto) {
 
             }
 
-
-
             this.postProcessTarget.display.setPosition(0, 0, -2);
             this.postProcessTarget.display.parent = camera;
             this.postProcessTarget.display.update();
-            this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+           // this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
 
-
+           // renderShadowDepth(camera, transparentMeshes);     
+          //  this.gl.clearColor(0, 0, 0, 0);
+          //  this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+          //  this.gl.clearColor(0, 0, 0, 1);
+            
             if (opuqueMeshes.length > 0) {
                 _this.renderLighting(camera, lights, function (updateShadingLights) {
                     for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
@@ -617,15 +619,15 @@ tge.engine = $extend(function (proto) {
                 _this.renderMesh(mesh);
             }
 
-            // _this.enableFWRendering();
-            _this.gl.enable(_this.gl.BLEND);
-            _this.gl.blendFunc(_this.gl.ONE_MINUS_SRC_COLOR, _this.gl.ONE_MINUS_SRC_COLOR);
-          //  _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
-            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
-           // _this.gl.blendEquation(_this.gl.FUNC_ADD);
-            _this.gl.disable(_this.gl.BLEND);
-           // _this.disableFWRendering();
-            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+
+            
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, true);
+
+            }
+
+        
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];
 
@@ -670,26 +672,33 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-            this.defaultRenderTarget = this.postProcessTarget;
-            this.setDefaultViewport().clearScreen();
-            for (i4 = 0; i4 < lights.length; i4++) {
-                light = lights[i4];
-                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, i4 > 0 ? true : false);
-
-            }
+          //  this.defaultRenderTarget = this.postProcessTarget;
+          //  this.setDefaultViewport().clearScreen();
+           
 
 
           
 
-            this.defaultRenderTarget = this._defaultRenderTarget;
-
-
-
+         //   this.defaultRenderTarget = this._defaultRenderTarget;
+            /*
+            // _this.enableFWRendering();
+            _this.gl.enable(_this.gl.BLEND);
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+             // _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
+            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
+            // _this.gl.blendEquation(_this.gl.FUNC_ADD);
+            _this.gl.disable(_this.gl.BLEND);
+            // _this.disableFWRendering();
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+            */
             
 
             postProcessOutput = this.defaultRenderTarget.colorTexture;
+
+
             this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
 
+           
 
             _this.textureSlots[0] = -1;
             _this.updateTextures();

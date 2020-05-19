@@ -217,16 +217,17 @@ tge.light = $extend(function (proto, _super) {
 
            
             if (fwdRendering) engine.enableFWRendering();
-        //     engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);            
+            //engine.gl.enable(engine.gl.BLEND);
+            //engine.gl.blendFunc(engine.gl.ONE, engine.gl.ONE);
+             engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);            
             renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, opuqueMeshes);                        
-            engine.gl.enable(engine.gl.BLEND);
-            engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
-          //   renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, transparentMeshes);
-            //engine.gl.blendEquation(engine.gl.FUNC_ADD);
-            if (fwdRendering)
-                engine.disableFWRendering();
-            else
-                engine.gl.disable(engine.gl.BLEND);
+           
+          //  engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+            engine.gl.depthFunc(engine.gl.LESS);
+             renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, transparentMeshes);
+           engine.gl.blendEquation(engine.gl.FUNC_ADD);
+            if (fwdRendering) engine.disableFWRendering();
+            
 
             
             light.shadowMap.display.setPosition(0, 0, -2);
