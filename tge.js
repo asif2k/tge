@@ -1834,7 +1834,7 @@ tge.geometry = $extend(function (proto) {
                     // uvs
 
                     uvs.push(ix / gridX);
-                    uvs.push(1 - (iy / gridY));
+                    uvs.push((iy / gridY));
 
                     // counters
 
@@ -2840,9 +2840,20 @@ gl_FragColor = vec4(depth, moment2, 0.0, 0.0);
 /*chunk-normal-shadow-map-render*/
 <?=chunk('precision')?>
 
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
+uniform mat4 tge_u_objectMaterial;
+
 void fragment(void) {
-gl_FragColor = vec4(1.0);
+
+
+if(texture2D(tge_u_ambientTexture, tge_v_uv).w<0.02) discard;
+
+gl_FragColor=vec4(1.0);
+
+
 }
+
 
 /*chunk-variance-cascade-shadow-receiver*/
 
@@ -2931,7 +2942,8 @@ tge_v_shadow_light_vertex.xyz/=tge_v_shadow_light_vertex.w;
 <?=chunk('variance-shadow-sampling')?>
 
 uniform mat4 tge_u_lightCameraMatrix;
- vec4 tge_v_shadow_light_vertex;
+vec4 tge_v_shadow_light_vertex;
+
 varying vec4 tge_v_shadow_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
@@ -2985,6 +2997,7 @@ return d > shadowMapCoords.z-0.0001? 0.0 : 0.5;
 
 void fragment(void) {
 gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
+
 }
 
 
@@ -3011,7 +3024,7 @@ tge_v_shadow_light_vertex.xyz = tge_v_shadow_light_vertex.xyz * 0.5 + 0.5;
 
 
 <?=chunk('precision')?>
-<?=chunk('variance-shadow-sampling')?>
+<?=chunk('shadow-sampling')?>
 
 
 varying vec3 tge_v_normal;
@@ -3020,13 +3033,26 @@ varying vec4 tge_v_shadow_light_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
 uniform vec3 tge_u_light_dir;
+uniform mat4 tge_u_objectMaterial;
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
 
 float getShadowSample() {
 if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;
+
 vec3 shadowMapCoords=tge_v_shadow_light_vertex.xyz;
 if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);
 if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
 
+
+
+return texture2D(tge_u_shadowMap, shadowMapCoords.xy).r> shadowMapCoords.z-0.0001? 0.0 : 0.5;
+return 0.5-SampleShadowMapPCF(tge_u_shadowMap, shadowMapCoords.xy,shadowMapCoords.z,vec2(1.0/1024.0));
+
+return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+0.0000001,0.000000);
+
+ 
 float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
 
 
@@ -3038,8 +3064,23 @@ return d > shadowMapCoords.z-0.0001? 0.0 : 0.5;
 
 
 void fragment(void) {
-gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
-}`);
+
+
+gl_FragColor = vec4(0.65)*(0.5-getShadowSample());
+gl_FragColor.w *= tge_u_objectMaterial[0].w;
+
+}
+
+
+/*chunk-shadow-post-process*/
+void fragment(){
+super_fragment();
+if(tge_v_uv.x>0.5){
+
+
+}
+}
+`);
     
     shader.parse = function (_source, params) {
         
@@ -3458,6 +3499,8 @@ tge.texture = $extend(function (proto) {
         if (texture.imageQueue) {
             source = texture.imageQueue;
             tge.texture.free_images.push(texture.imageQueue);
+            texture.width = texture.imageQueue.width;
+            texture.height = texture.imageQueue.height;
             console.log('free', texture.imageQueue);
             texture.imageQueue = undefined;
         }
@@ -3743,17 +3786,19 @@ tge.material = $extend(function (proto,_super) {
 
     proto.renderMesh = function (engine, shader, mesh) {
 
-        if (!shader.shadowShader) {
-            if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
-                engine.useTexture(this.ambientTexture, 0);
-                if (shader.setUniform("tge_u_normalMap", 1)) {
-                    engine.useTexture(this.normalMap, 1);
-                }
-                if (shader.setUniform("tge_u_dispMap", 2)) {
-                    engine.useTexture(this.dispMap, 2);
-                }
-                shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
+        if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
+            engine.useTexture(this.ambientTexture, 0);
+            if (shader.setUniform("tge_u_normalMap", 1)) {
+                engine.useTexture(this.normalMap, 1);
             }
+            if (shader.setUniform("tge_u_dispMap", 2)) {
+                engine.useTexture(this.dispMap, 2);
+            }
+            shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
+        }
+        else {
+            engine.useTexture(this.ambientTexture, 0);
+            shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
         }
         
 
@@ -3935,6 +3980,7 @@ gl_Position = tge_u_viewProjectionMatrix * tge_v_shadow_vertex;
 uniform mat4 tge_u_objectMaterial;
 uniform vec4 tge_u_eyePosition;
 uniform sampler2D tge_u_ambientTexture;
+uniform sampler2D tge_u_lightMap;
 
 varying vec4 tge_v_shadow_vertex;
 varying vec2 tge_v_uv;
@@ -3956,6 +4002,13 @@ tge_u_lightMatrix<?=i?>[2].xyz);
 <?}?>
 gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * texture2D(tge_u_ambientTexture, tge_v_uv);
 gl_FragColor.w *= tge_u_objectMaterial[0].w;
+/*
+vec2 iResolution=vec2(2435.0,1907.0);
+vec2 uv = vec2(gl_FragCoord.xy/ iResolution.xy);
+uv.y =uv.y;
+gl_FragColor-=(texture2D(tge_u_lightMap,uv));
+*/
+
 }
 
 `);
@@ -4455,123 +4508,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
         return shader.default_shadow_receiver;
     }
 
-    proto.renderShadows = (function () {
-        var light_camera;
-        var shadow_maps = {}, shadow_map, i = 0, castCount,updateLightCameraMatrices=false;
-        var tge_u_shadow_params = tge.vec4();
-        return function (engine, camera, castShadowMeshes, receiveShadowMeshes) {
-            shadow_map = shadow_maps[this.shadowMapSize];
-            if (!shadow_map) {
-                shadow_map = new tge.rendertarget(engine.gl, this.shadowMapSize, this.shadowMapSize, true);
-                shadow_maps[this.shadowMapSize] = shadow_map;
-                shadow_map.display = shadow_map.getColorDisplay(undefined, false);
-                console.log("shadow_map", shadow_map);
-                
-            }
-            light_camera = this.getShadowCamera();
-
-            updateLightCameraMatrices = false;
-            
-            if (light_camera.shadowLightVersion !== this.version) {
-                light_camera.shadowLightVersion = this.version;
-                if (this.lightType === 1) { // point light only set position
-                    tge.vec3.copy(light_camera.worldPosition, this.worldPosition);                   
-                }
-                else {
-                    
-                    tge.mat4.copy(light_camera.matrixWorld, this.matrixWorld);
-                  //  console.log("updateLightCameraMatrices", this.matrixWorld);
-                    
-                }
-                updateLightCameraMatrices = true;
-            }
-
-
-            if (this.lightType === 0) { 
-                // directional light align with view camera position
-                if (light_camera.shadowCameraVersion !== camera.version || updateLightCameraMatrices) {
-                    light_camera.shadowCameraVersion = camera.version;
-                    light_camera.worldPosition[0] = (camera.fwVector[0] * this.shadowCameraDistance) + camera.worldPosition[0];
-                    light_camera.worldPosition[1] = (camera.fwVector[1] * this.shadowCameraDistance) + camera.worldPosition[1];
-                    light_camera.worldPosition[2] = (camera.fwVector[2] * this.shadowCameraDistance) + camera.worldPosition[2];
-                    updateLightCameraMatrices = true;
-                }
-            }
-
-            if (updateLightCameraMatrices) {
-              
-                light_camera.updateMatrixWorldInverse().updateMatrixWorldProjection();
-                light_camera.version = camera.version + this.version;
-            }
-
-            shadow_map.bind();
-            castCount = 0;
-            for (i = 0; i < castShadowMeshes.length; i++) {
-                mesh = castShadowMeshes[i];             
-
-                if (!this.validShadowCaster(mesh.model)) continue;
-                castCount++;
-                if (!mesh.material.shader.depthShader) {
-                    mesh.material.shader.depthShader = tge.pipleline_shader.parse('void fragment(){gl_FragColor=vec4(1.0);}', mesh.material.shader, true);
-                    mesh.material.shader.depthShader.shadowShader = true;
-                }  
-                engine.useMaterial(mesh.material, mesh.material.shader.depthShader);                
-                engine.updateCameraUniforms(light_camera);
-                engine.updateModelViewMatrix(light_camera, mesh.model);
-                engine.gl.cullFace(engine.gl.FRONT);
-                engine.renderMesh(mesh);
-
-            }           
-            engine.setDefaultViewport();
-
-            // if any mesh was rendered in shadow map
-            if (castCount > 0) {                
-                engine.gl.cullFace(engine.gl.BACK);
-                tge_u_shadow_params[0] = this.shadowBias;                
-                tge_u_shadow_params[1] = this.shadowOpacity
-                tge_u_shadow_params[2] = this.shadowMapSize;
-                engine.enableFWRendering();
-                engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
-                for (i = 0; i < receiveShadowMeshes.length; i++) {
-                    mesh = receiveShadowMeshes[i];                    
-                    if (engine.useMaterial(mesh.material, this.getShadowReceiverShader(mesh.material.shader))) {
-                        engine.activeShader.setUniform("tge_u_shadow_params", tge_u_shadow_params);
-                        engine.activeShader.setUniform("tge_u_shadowMap", 2);
-                        engine.useTexture(shadow_map.depthTexture, 2);
-                        engine.activeShader.setUniform("tge_u_lightCameraMatrix", light_camera.matrixWorldProjection);                        
-                    };
-                    
-                    engine.updateCameraUniforms(camera);
-                    engine.updateModelViewMatrix(camera, mesh.model);
-                    engine.renderMesh(mesh);
-
-                }
-                engine.gl.blendEquation(engine.gl.FUNC_ADD);
-                engine.disableFWRendering();                
-            }
-            
-
-
-            // only for debug light camera
-            if (!light_camera.display) {
-                light_camera.display = light_camera.getDisplay();
-            }
-            light_camera.display.modelViewMatrixVersion = -1;
-            engine.renderSingleMesh(camera, light_camera.display.meshes[0]);            
-
-            // only for debug shadowmap
-            /*
-            shadow_map.display.setPosition(0, 0, -2);           
-            shadow_map.display.parent = camera;
-            shadow_map.display.update();
-            engine.renderSingleMesh(camera, shadow_map.display.meshes[0]);
-            */
-
-        }
-    })();
-
-
-
+   
     function light(options) {
         options = options || {};
         _super.apply(this, arguments);
@@ -4625,6 +4562,129 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
         return shader.variance_shadow_receiver;
     }
 
+
+
+    proto.renderShadows = (function () {
+        var m = 0, light,d;
+        var castCount, updateLightCameraMatrices;
+        function renderShadowCasters(engine, light, light_camera, meshes) {
+            castCount = 0;
+            for (m = 0; m < meshes.length; m++) {
+                mesh = meshes[m];
+                if (mesh.material.flags & tge.SHADING.CAST_SHADOW) {                    
+                    if (!light.validShadowCaster(light_camera, mesh.model)) continue;
+                    castCount++;
+                    if (!mesh.material.shader.depthShader) {
+                        mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
+                        mesh.material.shader.depthShader.shadowShader = true;                        
+                    }
+                    engine.useMaterial(mesh.material, mesh.material.shader.depthShader);                    
+                    engine.activeShader.setUniform("tge_u_viewProjectionMatrix", light_camera.matrixWorldProjection);
+                    engine.updateModelViewMatrix(light_camera, mesh.model);
+                    if (light.shadowFlipFaces) engine.gl.cullFace(engine.gl.FRONT);
+                    engine.renderMesh(mesh);
+                }
+
+            }
+            if (castCount > 0 && light.shadowFlipFaces) engine.gl.cullFace(engine.gl.BACK);
+            return castCount;
+        }
+
+        function renderShadowReceivers(engine, light, shadow_map, light_camera, camera, meshes) {
+            for (m = 0; m < meshes.length; m++) {
+                mesh = meshes[m];
+                if (mesh.material.flags & tge.SHADING.RECEIVE_SHADOW) {
+                    if (engine.useMaterial(mesh.material, light.getShadowReceiverShader(mesh.material.shader))) {                        
+                        engine.activeShader.setUniform("tge_u_shadowMap", 1);
+                        engine.useTexture(shadow_map.depthTexture, 1);
+                        engine.activeShader.setUniform("tge_u_lightCameraMatrix", light_camera.matrixWorldProjection);
+                        engine.activeShader.setUniform("tge_u_light_dir", light.fwVector);
+                    };
+                    engine.updateCameraUniforms(camera);
+                    engine.updateModelViewMatrix(camera, mesh.model);
+                    engine.renderMesh(mesh);
+                    
+                }
+                
+
+            }
+
+        }
+
+
+        return function (engine, camera, opuqueMeshes, transparentMeshes,fwdRendering) {
+            light = this;
+            if (!light.shadowMap) {
+                light.shadowMap = new tge.rendertarget(engine.gl, light.shadowMapSize, light.shadowMapSize, true);
+                light.shadowMap.display = light.shadowMap.getColorDisplay();
+            }
+            updateLightCameraMatrices = false;
+
+
+            if (!light.shadowCamera) {
+                d = light.shadowCameraDistance * 2;
+                light.shadowCamera = new tge.ortho_camera(-d, d, -d, d, -d * 0.5, d * 10);
+                updateLightCameraMatrices = true;
+            }
+           
+            if (light.shadowCamera.shadowLightVersion !== light.version || updateLightCameraMatrices) {
+                light.shadowCamera.shadowLightVersion = light.version;
+                tge.mat4.copy(light.shadowCamera.matrixWorld, light.matrixWorld);
+                updateLightCameraMatrices = true;
+            }
+            if (light.shadowCamera.shadowCameraVersion !== camera.version || updateLightCameraMatrices) {
+                d = -light.shadowCameraDistance;
+                light.shadowCamera.shadowCameraVersion = camera.version;
+                light.shadowCamera.worldPosition[0] = (camera.fwVector[0] * d) + camera.worldPosition[0];
+                light.shadowCamera.worldPosition[1] = (camera.fwVector[1] * d) + camera.worldPosition[1];
+                light.shadowCamera.worldPosition[2] = (camera.fwVector[2] * d) + camera.worldPosition[2];
+                updateLightCameraMatrices = true;
+            }
+            if (updateLightCameraMatrices) {
+                light.shadowCamera.updateMatrixWorldInverse().updateMatrixWorldProjection();
+                light.shadowCamera.version = camera.version + light.version;
+            }
+
+            light.shadowMap.bind();
+
+            renderShadowCasters(engine, light, light.shadowCamera, opuqueMeshes);
+            if (transparentMeshes.length > 0) {
+             //   engine.gl.enable(engine.gl.BLEND);
+             //   engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+                renderShadowCasters(engine, light, light.shadowCamera, transparentMeshes);
+            //  engine.gl.blendFunc(engine.gl.ONE, engine.gl.ONE);
+              //  engine.gl.disable(engine.gl.BLEND);
+            }
+            
+
+            engine.setDefaultViewport();
+
+
+           
+            if (fwdRendering) engine.enableFWRendering();
+        //     engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);            
+            renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, opuqueMeshes);                        
+            engine.gl.enable(engine.gl.BLEND);
+            engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+          //   renderShadowReceivers(engine, light, light.shadowMap, light.shadowCamera, camera, transparentMeshes);
+            //engine.gl.blendEquation(engine.gl.FUNC_ADD);
+            if (fwdRendering)
+                engine.disableFWRendering();
+            else
+                engine.gl.disable(engine.gl.BLEND);
+
+            
+            light.shadowMap.display.setPosition(0, 0, -2);
+            light.shadowMap.display.parent = camera;
+            light.shadowMap.display.update();
+            //engine.renderSingleMesh(camera, light.shadowMap.display.meshes[0]);
+        }
+    })();
+
+
+
+
+
     light.castShadows = (function () {
 
         var i = 0,i1=0, li = 0, light, d;
@@ -4638,21 +4698,24 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
             if (!shadow_map) {
                 shadow_map = new tge.rendertarget(engine.gl, size, size, true);
                 shadow_maps[light.shadowMapSize] = shadow_map;
+                shadow_map.display = shadow_map.getColorDisplay();
             }
             return shadow_map;
         }
-
+        
         var castCount;
-        function renderShadowCasters(engine, light, light_camera, castShadowMeshes) {
+        function renderShadowCasters(engine, light, light_camera, transparentShadowCasters, opugueShadowCasters) {
             castCount = 0;
-            for (i = 0; i < castShadowMeshes.length; i++) {
-                mesh = castShadowMeshes[i];
+
+            for (i = 0; i < opugueShadowCasters.length; i++) {
+                mesh = opugueShadowCasters[i];
 
                 if (!light.validShadowCaster(light_camera, mesh.model)) continue;
                 castCount++;
                 if (!mesh.material.shader.depthShader) {
                     mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
                     mesh.material.shader.depthShader.shadowShader = true;
+                    console.log(" mesh.material.shader.depthShader", mesh.material.shader.depthShader);
                 }
                 engine.useMaterial(mesh.material, mesh.material.shader.depthShader);
                 //engine.updateCameraUniforms(light_camera);
@@ -4661,8 +4724,34 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
                 engine.updateModelViewMatrix(light_camera, mesh.model);
                 if (light.shadowFlipFaces) engine.gl.cullFace(engine.gl.FRONT);
                 engine.renderMesh(mesh);
-            }         
+            }  
+//
+           engine.gl.enable(engine.gl.BLEND);
+            engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
 
+            engine.textureSlots[0] = -1;
+            for (i = 0; i < transparentShadowCasters.length; i++) {
+                mesh = transparentShadowCasters[i];
+
+                if (!light.validShadowCaster(light_camera, mesh.model)) continue;
+                castCount++;
+                if (!mesh.material.shader.depthShader) {
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
+                    mesh.material.shader.depthShader.shadowShader = true;
+                   
+                }
+                engine.useMaterial(mesh.material, mesh.material.shader.depthShader);
+                //engine.updateCameraUniforms(light_camera);
+                engine.activeShader.setUniform("tge_u_viewProjectionMatrix", light_camera.matrixWorldProjection);
+
+                engine.updateModelViewMatrix(light_camera, mesh.model);
+                if (light.shadowFlipFaces) engine.gl.cullFace(engine.gl.FRONT);
+              
+                engine.renderMesh(mesh);
+                
+            }  
+            engine.gl.blendFunc(engine.gl.ONE, engine.gl.ONE);
+            engine.gl.disable(engine.gl.BLEND);
             if (castCount > 0 && light.shadowFlipFaces) engine.gl.cullFace(engine.gl.BACK);
             return castCount;
 
@@ -4676,7 +4765,6 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
             tge_u_shadow_params[1] = light.shadowOpacity
             tge_u_shadow_params[2] = light.shadowMapSize;            
             tge.vec3.set(worldPosition, light.fwVector[0] * 200, light.fwVector[1] * 200, light.fwVector[2] * 200);
-
             for (i = 0; i < receiveShadowMeshes.length; i++) {
                 mesh = receiveShadowMeshes[i];
                 if (engine.useMaterial(mesh.material, light.getShadowReceiverShader(mesh.material.shader))) {
@@ -4688,14 +4776,14 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
                 };
 
                 engine.updateCameraUniforms(camera);
-                engine.updateModelViewMatrix(camera, mesh.model);
+                engine.updateModelViewMatrix(camera, mesh.model);                
                 engine.renderMesh(mesh);
 
             }
             
         }
 
-        function directionalLightShadow(light, engine, camera, castShadowMeshes, receiveShadowMeshes) {
+        function directionalLightShadow(light, engine, camera, transparentShadowCasters, opugueShadowCasters, allShadowReceivers) {
             shadow_map = getShadowMap(engine, light.shadowMapSize);            
             updateLightCameraMatrices = false;
             if (orth_camera.light !== light.uuid) {
@@ -4724,20 +4812,26 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
             }
 
             shadow_map.bind();
-            castCount = renderShadowCasters(engine, light, orth_camera, castShadowMeshes);
+            castCount = renderShadowCasters(engine, light, orth_camera, transparentShadowCasters, opugueShadowCasters);
+            
             engine.setDefaultViewport();
 
             // if any mesh was rendered in shadow map
             if (castCount > 0) {                
                 engine.enableFWRendering();
                 engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
-                renderShadowReceivers(engine, light, orth_camera, camera, receiveShadowMeshes);
+                renderShadowReceivers(engine, light, orth_camera, camera, allShadowReceivers);
                 engine.gl.blendEquation(engine.gl.FUNC_ADD);
                 engine.disableFWRendering();
             }
 
 
 
+
+            shadow_map.display.setPosition(0, 0, -2);
+            shadow_map.display.parent = camera;
+            shadow_map.display.update();
+            engine.renderSingleMesh(camera, shadow_map.display.meshes[0]);
 
         }
 
@@ -4836,14 +4930,16 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
             }
         })();
 
-        return function (lights, engine, camera, allMeshes) {
+        return function (lights, engine, camera, transparentShadowCasters, opugueShadowCasters, allShadowReceivers) {
+
+            
             for (li = 0; li < lights.length; li++) {
                 light = lights[li];
                 if (light.lightType === 0) {
                     if (light.cascadeShadow)
-                        cascadeShadow(light, engine, camera, allMeshes.castShadowMeshes, allMeshes.receiveShadowMeshes);                    
+                        cascadeShadow(light, engine, camera, transparentShadowCasters, opugueShadowCasters, allShadowReceivers);                    
                     else
-                        directionalLightShadow(light, engine, camera, allMeshes.castShadowMeshes, allMeshes.receiveShadowMeshes);
+                        directionalLightShadow(light, engine, camera, transparentShadowCasters, opugueShadowCasters, allShadowReceivers);
                 }
             }
 
@@ -4852,6 +4948,7 @@ gl_FragColor = vec4(shadowOpacity)* getShadowSampleVariance(tge_u_lightCameraMat
     })();
 
 
+    
 
 
 
@@ -5280,12 +5377,13 @@ tge.engine = $extend(function (proto) {
 
 
 
-        this.defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
-        this.defaultRenderTarget.clearBuffer = false;
+        this._defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
+        this._defaultRenderTarget.clearBuffer = false;
 
+        this.defaultRenderTarget = this._defaultRenderTarget;
         this.postProcessTarget = new tge.rendertarget(gl, 10, 10, true);
-       // this.postProcessTarget.clearBuffer = false;
-
+        this.postProcessTarget.clearBuffer = false;
+        this.postProcessTarget.display = this.postProcessTarget.getColorDisplay();
 
         this.postProcessPipeline = [];
 
@@ -5299,6 +5397,8 @@ tge.engine = $extend(function (proto) {
             return pp2
         });
 
+
+        this.shadowPostProcess = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('shadow-post-process')?>"));
 
         this.tge_u_pipelineParams = tge.vec4();
         
@@ -5335,8 +5435,8 @@ tge.engine = $extend(function (proto) {
 
     proto.setDefaultViewport = function () {
         this.defaultRenderTarget.bind();
-        //this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-        //this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+       // this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      //  this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
         this.lastRenderTargetId = -1;
         return (this)
     };
@@ -5466,6 +5566,7 @@ tge.engine = $extend(function (proto) {
         this.gl.blendFunc(this.gl.ONE, this.gl.ONE);
 
         if (this.FWRenderingMode) return;
+       
         this.gl.enable(this.gl.BLEND);
 
         this.gl.depthMask(false);
@@ -5556,7 +5657,9 @@ tge.engine = $extend(function (proto) {
     proto.renderList = (function () {
         
 
-        var castShadowMeshes = [], receiveShadowMeshes = [];
+
+        var transparentShadowCasters = [], opugueShadowCasters = [], allShadowReceivers = [];
+
         var castShadowLights = [];
 
 
@@ -5572,7 +5675,7 @@ tge.engine = $extend(function (proto) {
             this.lightsBatchSize = 0;
             for (i1 = 0; i1 < lights.length; i1++) {
                 light = lights[i1];
-                if (light.castShadows) castShadowLights[castShadowLights.length] = light;
+                
                 this.shadingLights[this.lightsBatchSize++] = light;
                 updateShadingLights = this.lightsBatchSize === this.shadingLightsCount || i1 === lights.length - 1;
                 if (updateShadingLights) {
@@ -5608,26 +5711,37 @@ tge.engine = $extend(function (proto) {
 
 
 
-        var allMeshes = {
-            castShadowMeshes: null,
-            receiveShadowMeshes: null,
-            transparentMeshes: null,
-            opuqueMeshes: null,
-            flatMeshes: null,
-        }
 
 
 
         var postProcessOutput;
-        return function (camera, meshes, lights,cb) {
 
-            
+
+
+        function renderShadowDepth(camera, meshes) {
+            for (i4 = 0; i4 < meshes.length; i4++) {
+                mesh = meshes[i4];
+                if (!mesh.material.shader.depthShader) {
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
+                    mesh.material.shader.depthShader.shadowShader = true;
+                }
+                _this.useMaterial(mesh.material, mesh.material.shader.depthShader);
+                _this.activeShader.setUniform("tge_u_viewProjectionMatrix", camera.matrixWorldProjection);
+
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+        }
+
+        return function (camera, meshes, lights, cb) {
+
+            this.setDefaultViewport().clearScreen();
             if (this.isError) {
                 return;
             }
             currentCamera = camera;
 
-            castShadowLights.length = 0;
+
 
             time = performance.now();
             this.frameTimeDelta = this.frameTime - time;
@@ -5640,15 +5754,11 @@ tge.engine = $extend(function (proto) {
 
             _this = this;
 
-
-
+            castShadowLights.length = 0;
             if (meshes.sorted !== true) {
                 transparentMeshes.length = 0;
                 opuqueMeshes.length = 0;
                 flatMeshes.length = 0;
-                castShadowMeshes.length = 0;
-                receiveShadowMeshes.length = 0;
-
 
 
                 for (i4 = 0; i4 < meshes.length; i4++) {
@@ -5657,20 +5767,17 @@ tge.engine = $extend(function (proto) {
                     if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
                         transparentMeshes[transparentMeshes.length] = mesh;
                     }
-                    else if (mesh.material.flags & tge.SHADING.FLAT) {
-                        flatMeshes[flatMeshes.length] = mesh;
-
-                    }
                     else {
-                        opuqueMeshes[opuqueMeshes.length] = mesh;
+
+                        if (mesh.material.flags & tge.SHADING.FLAT) {
+                            flatMeshes[flatMeshes.length] = mesh;
+
+                        }
+                        else {
+                            opuqueMeshes[opuqueMeshes.length] = mesh;
+                        }
                     }
 
-                    if (mesh.material.flags & tge.SHADING.CAST_SHADOW) {
-                        castShadowMeshes[castShadowMeshes.length] = mesh;
-                    }
-                    if (mesh.material.flags & tge.SHADING.RECEIVE_SHADOW) {
-                        receiveShadowMeshes[receiveShadowMeshes.length] = mesh;
-                    }
 
                 }
 
@@ -5679,6 +5786,7 @@ tge.engine = $extend(function (proto) {
 
                 if (transparentMeshes.length > 0) {
                     transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);
+                    //transparentShadowCasters = $mergesort(transparentShadowCasters, transparentMeshSortFunc);
                 }
                 if (opuqueMeshes.length > 0) {
                     opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
@@ -5687,7 +5795,198 @@ tge.engine = $extend(function (proto) {
                 if (flatMeshes.length > 0) {
                     flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
                 }
-                
+
+                meshes.sorted = true;
+
+            }
+
+
+
+            this.postProcessTarget.display.setPosition(0, 0, -2);
+            this.postProcessTarget.display.parent = camera;
+            this.postProcessTarget.display.update();
+            this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+
+
+            if (opuqueMeshes.length > 0) {
+                _this.renderLighting(camera, lights, function (updateShadingLights) {
+                    for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
+                        mesh = opuqueMeshes[i4];
+
+
+
+                        if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                        }
+                        _this.activeShader.setUniform("tge_u_lightMap", 4);
+                        _this.useTexture(_this.postProcessTarget.colorTexture, 4);
+                        _this.updateModelViewMatrix(camera, mesh.model);
+                        _this.renderMesh(mesh);
+                    }
+
+                });
+            }
+
+            _this.disableFWRendering();
+            for (i4 = 0; i4 < flatMeshes.length; i4++) {
+                mesh = flatMeshes[i4];
+
+
+                if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                    _this.updateCameraUniforms(camera);
+                }
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+
+            // _this.enableFWRendering();
+            _this.gl.enable(_this.gl.BLEND);
+            _this.gl.blendFunc(_this.gl.ONE_MINUS_SRC_COLOR, _this.gl.ONE_MINUS_SRC_COLOR);
+          //  _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
+            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
+           // _this.gl.blendEquation(_this.gl.FUNC_ADD);
+            _this.gl.disable(_this.gl.BLEND);
+           // _this.disableFWRendering();
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+            for (i4 = 0; i4 < transparentMeshes.length; i4++) {
+                mesh = transparentMeshes[i4];
+
+                if (mesh.material.flags & tge.SHADING.SHADED) {
+                    if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                    _this.renderLighting(camera, lights, function (updateShadingLights) {
+
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateModelViewMatrix(camera, mesh.model);
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+
+                            if (_this.lightPassCount === 0) {
+                                _this.gl.enable(_this.gl.BLEND);
+                                _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                                _this.gl.cullFace(_this.gl.FRONT);
+                                _this.renderMesh(mesh);
+                                _this.gl.cullFace(_this.gl.BACK);
+                                _this.renderMesh(mesh);
+                            }
+                            else {
+                                _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                               _this.renderMesh(mesh);
+                            }
+                        }
+
+
+                    });
+                    _this.disableFWRendering();
+                }
+                else {
+                    if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                        _this.updateCameraUniforms(camera);
+                    }
+                    _this.updateModelViewMatrix(camera, mesh.model);
+                    _this.gl.enable(_this.gl.BLEND);
+                    _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                    _this.renderMesh(mesh);
+
+                }
+            }
+            _this.disableFWRendering();
+
+            this.defaultRenderTarget = this.postProcessTarget;
+            this.setDefaultViewport().clearScreen();
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, i4 > 0 ? true : false);
+
+            }
+
+
+          
+
+            this.defaultRenderTarget = this._defaultRenderTarget;
+
+
+
+            
+
+            postProcessOutput = this.defaultRenderTarget.colorTexture;
+            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
+
+
+            _this.textureSlots[0] = -1;
+            _this.updateTextures();
+
+
+        }
+
+
+
+        return function (camera, meshes, lights, cb) {
+
+            this.setDefaultViewport().clearScreen();
+            if (this.isError) {
+                return;
+            }
+            currentCamera = camera;
+
+
+
+            time = performance.now();
+            this.frameTimeDelta = this.frameTime - time;
+            this.frameTime = time;
+            this.lastShaderId = -1;
+
+
+            this.tge_u_pipelineParams[0] = this.frameTime;
+            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
+
+            _this = this;
+
+            castShadowLights.length = 0;
+            if (meshes.sorted !== true) {
+                transparentMeshes.length = 0;
+                opuqueMeshes.length = 0;
+                flatMeshes.length = 0;
+             
+
+                for (i4 = 0; i4 < meshes.length; i4++) {
+                    mesh = meshes[i4];
+
+                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                        transparentMeshes[transparentMeshes.length] = mesh;
+                    }
+                    else {
+
+                        if (mesh.material.flags & tge.SHADING.FLAT) {
+                            flatMeshes[flatMeshes.length] = mesh;
+
+                        }
+                        else {
+                            opuqueMeshes[opuqueMeshes.length] = mesh;
+                        }
+                    }
+
+
+                }
+
+
+
+
+                if (transparentMeshes.length > 0) {
+                    transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);
+                    //transparentShadowCasters = $mergesort(transparentShadowCasters, transparentMeshSortFunc);
+                }
+                if (opuqueMeshes.length > 0) {
+                    opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
+                }
+
+                if (flatMeshes.length > 0) {
+                    flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
+                }
+
                 meshes.sorted = true;
 
             }
@@ -5721,21 +6020,24 @@ tge.engine = $extend(function (proto) {
             for (i4 = 0; i4 < flatMeshes.length; i4++) {
                 mesh = flatMeshes[i4];
 
+
                 if (_this.useMaterial(mesh.material, mesh.material.shader)) {
-                     _this.updateCameraUniforms(camera);
+                    _this.updateCameraUniforms(camera);
                 }
                 _this.updateModelViewMatrix(camera, mesh.model);
                 _this.renderMesh(mesh);
             }
 
 
+
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];
+
                 if (mesh.material.flags & tge.SHADING.SHADED) {
                     if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
                     _this.renderLighting(camera, lights, function (updateShadingLights) {
 
-                        if (_this.useMaterial(mesh.material,mesh.material.shader) || updateShadingLights) {
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
                             updateShadingLights = false;
                             _this.updateModelViewMatrix(camera, mesh.model);
                             _this.updateCameraUniforms(camera);
@@ -5771,29 +6073,14 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-            this.lastShaderId = -1;
-
-            /*
-            for (i1 = 0; i1 < lights.length; i1++) {
-                light = lights[i1];
-                if (light.castShadows) {
-                    light.renderShadows(this, camera, castShadowMeshes, receiveShadowMeshes);
-                }
-            }
-            */
-            allMeshes.castShadowMeshes = castShadowMeshes;
-            allMeshes.receiveShadowMeshes = receiveShadowMeshes;
-            allMeshes.transparentMeshes = transparentMeshes;
-            allMeshes.opuqueMeshes = opuqueMeshes;
-            allMeshes.flatMeshes = flatMeshes;
-
-            if (castShadowLights.length > 0) {
-                tge.light.castShadows(castShadowLights, this, camera, allMeshes);
-            }
 
 
-           
-            
+
+
+
+
+
+
 
 
 
@@ -5801,7 +6088,7 @@ tge.engine = $extend(function (proto) {
 
 
             if (cb) {
-              
+
                 cb(this, camera, lights, allMeshes);
 
             }
@@ -5820,9 +6107,9 @@ tge.engine = $extend(function (proto) {
                 }
             }
             */
-            
 
-            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
+
+           // this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
 
 
 
@@ -5831,11 +6118,195 @@ tge.engine = $extend(function (proto) {
 
 
         }
+        return function (camera, meshes, lights, cb) {
+
+
+            if (this.isError) {
+                return;
+            }
+            currentCamera = camera;
+
+
+            time = performance.now();
+            this.frameTimeDelta = this.frameTime - time;
+            this.frameTime = time;
+            this.lastShaderId = -1;
+
+
+            this.tge_u_pipelineParams[0] = this.frameTime;
+            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
+
+            _this = this;
+
+           
+            if (meshes.sorted !== true) {
+                transparentMeshes.length = 0;
+                opuqueMeshes.length = 0;
+                flatMeshes.length = 0;
+                
+                
+                for (i4 = 0; i4 < meshes.length; i4++) {
+                    mesh = meshes[i4];
+                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                        transparentMeshes[transparentMeshes.length] = mesh;                        
+                    }
+                    else if (mesh.material.flags & tge.SHADING.FLAT) {
+                        flatMeshes[flatMeshes.length] = mesh;
+                    }
+                    else {
+                        opuqueMeshes[opuqueMeshes.length] = mesh;
+                    }
+
+                }
+
+               
+
+
+                if (transparentMeshes.length > 0) {
+                    transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);                   
+                }
+                if (opuqueMeshes.length > 0) {
+                    opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
+                }
+
+                if (flatMeshes.length > 0) {
+                    flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
+                }
+
+                meshes.sorted = true;
+
+            }
+
+          //  this.defaultRenderTarget = this.postProcessTarget;
+            this.setDefaultViewport().clearScreen();
+
+           
+            renderShadowDepth(camera, opuqueMeshes);
+           // this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+            renderShadowDepth(camera, transparentMeshes);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes);
+
+            }
+            
+           // this.defaultRenderTarget = this._defaultRenderTarget;
+           // this.setDefaultViewport().clearScreen();
+
+
+            this.postProcessTarget.display.setPosition(0, 0, -2);
+            this.postProcessTarget.display.parent = camera;
+            this.postProcessTarget.display.update();
+           // this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+
+           _this.enableFWRendering();
+                       
+            if (opuqueMeshes.length > 0) {
+                _this.renderLighting(camera, lights, function (updateShadingLights) {
+                    for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
+                        mesh = opuqueMeshes[i4];
+
+
+
+                        if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                           // _this.activeShader.setUniform("tge_u_lightMap", 4);
+                            
+                        }
+                        
+                        _this.updateModelViewMatrix(camera, mesh.model);
+                        _this.renderMesh(mesh);
+                    }
+
+                });
+            }
+
+
+           // _this.disableFWRendering();
+            for (i4 = 0; i4 < flatMeshes.length; i4++) {
+                mesh = flatMeshes[i4];
+
+
+                if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                    _this.updateCameraUniforms(camera);
+                }
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+
+
+
+            for (i4 = 0; i4 < transparentMeshes.length; i4++) {
+                mesh = transparentMeshes[i4];
+
+                if (mesh.material.flags & tge.SHADING.SHADED) {
+                    if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                    _this.renderLighting(camera, lights, function (updateShadingLights) {
+
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateModelViewMatrix(camera, mesh.model);
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                            
+                        }
+                        if (_this.lightPassCount === 0) {
+                            _this.gl.enable(_this.gl.BLEND);
+                            _this.gl.blendFunc(_this.gl.DST_ALPHA, _this.gl.DST_ALPHA);
+                            // _this.gl.cullFace(_this.gl.FRONT);
+                            //  _this.renderMesh(mesh);
+                            // _this.gl.cullFace(_this.gl.BACK);
+                            _this.renderMesh(mesh);
+                            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                        }
+                        else {
+                            // _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                            // _this.renderMesh(mesh);
+                        }
+
+                    });
+                   // _this.disableFWRendering();
+                }
+                else {
+                    if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                        _this.updateCameraUniforms(camera);
+                    }
+                    _this.updateModelViewMatrix(camera, mesh.model);
+                    _this.gl.enable(_this.gl.BLEND);
+                    _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                    _this.renderMesh(mesh);
+
+                }
+            }
+            _this.disableFWRendering();
+
+
+            postProcessOutput = this.defaultRenderTarget.colorTexture;
+
+
+            //this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
+
+
+
+            _this.textureSlots[0] = -1;
+            _this.updateTextures();
+
+
+        }
+
+
+
+
     })();
     var fq = tge.geometry.quad2D();
     proto.renderPostProcessQuad = (function () {
         var shader;
-        return function (process, target, texture_input) {
+        return function (shader, target, texture_input) {
 
             if (target == null) {
                 this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -5844,7 +6315,7 @@ tge.engine = $extend(function (proto) {
             else {
                 target.bind();
             }
-            shader = process(this);
+
 
             if (this.lastShaderId !== shader.uuid) this.useShader(shader);
             this.useGeometry(fq);
@@ -5916,7 +6387,7 @@ tge.render_list = $extend(function (proto, _super) {
             model = models[i1];
             if ((model.flags & flags) !== 0) {
                 model.update();
-
+               
                 if (!model.enabling) continue;
                // console.log(model);
                 this.updateModelViewMatrix(camera, model);
@@ -5924,11 +6395,8 @@ tge.render_list = $extend(function (proto, _super) {
                     
                     for (i2 = 0; i2 < model.meshes.length; i2++) {
                         mesh = model.meshes[i2];
-                        mesh.camZ = model.modelViewPosition[2];
-                        if (mesh.modelMatrix) {
-                            tge.mat4.mul(tempMatrix, camera.matrixWorldInvserse, mesh.modelMatrix);
-                            mesh.camZ = tempMatrix[14];
-                        }
+                        mesh.cameraDistance = model.modelViewPosition[2];
+
                         this.meshes[this.meshes.length] = mesh;
                     }
                 }
@@ -6173,12 +6641,14 @@ tge.demo = function (parameters, cb) {
         geos.push(tge.geometry.cube({ size: 2 }));
         geos.push(tge.geometry.sphere());
         material = material || tge.phong_material;
+        var cc = 0;
         for (var x = -range; x <= range; x += step) {
             for (var z = -range; z <= range; z += step) {
                 scene.addModel(new tge.model(geos[Math.floor(Math.random() * geos.length)], new material()), function (md, mesh) {
                     md.setPosition(x, 0, z);
                     mesh.material.setAmbientRandom();
-                    onModel(md);
+                    onModel(md, cc);
+                    cc++;
                 });
             }
         }

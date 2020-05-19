@@ -89,6 +89,8 @@ tge.texture = $extend(function (proto) {
         if (texture.imageQueue) {
             source = texture.imageQueue;
             tge.texture.free_images.push(texture.imageQueue);
+            texture.width = texture.imageQueue.width;
+            texture.height = texture.imageQueue.height;
             console.log('free', texture.imageQueue);
             texture.imageQueue = undefined;
         }

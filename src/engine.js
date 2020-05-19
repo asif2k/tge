@@ -152,12 +152,13 @@ tge.engine = $extend(function (proto) {
 
 
 
-        this.defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
-        this.defaultRenderTarget.clearBuffer = false;
+        this._defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
+        this._defaultRenderTarget.clearBuffer = false;
 
+        this.defaultRenderTarget = this._defaultRenderTarget;
         this.postProcessTarget = new tge.rendertarget(gl, 10, 10, true);
-       // this.postProcessTarget.clearBuffer = false;
-
+        this.postProcessTarget.clearBuffer = false;
+        this.postProcessTarget.display = this.postProcessTarget.getColorDisplay();
 
         this.postProcessPipeline = [];
 
@@ -171,6 +172,8 @@ tge.engine = $extend(function (proto) {
             return pp2
         });
 
+
+        this.shadowPostProcess = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('shadow-post-process')?>"));
 
         this.tge_u_pipelineParams = tge.vec4();
         
@@ -207,8 +210,8 @@ tge.engine = $extend(function (proto) {
 
     proto.setDefaultViewport = function () {
         this.defaultRenderTarget.bind();
-        //this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-        //this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+       // this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      //  this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
         this.lastRenderTargetId = -1;
         return (this)
     };
@@ -338,6 +341,7 @@ tge.engine = $extend(function (proto) {
         this.gl.blendFunc(this.gl.ONE, this.gl.ONE);
 
         if (this.FWRenderingMode) return;
+       
         this.gl.enable(this.gl.BLEND);
 
         this.gl.depthMask(false);
@@ -428,7 +432,9 @@ tge.engine = $extend(function (proto) {
     proto.renderList = (function () {
         
 
-        var castShadowMeshes = [], receiveShadowMeshes = [];
+
+        var transparentShadowCasters = [], opugueShadowCasters = [], allShadowReceivers = [];
+
         var castShadowLights = [];
 
 
@@ -444,7 +450,7 @@ tge.engine = $extend(function (proto) {
             this.lightsBatchSize = 0;
             for (i1 = 0; i1 < lights.length; i1++) {
                 light = lights[i1];
-                if (light.castShadows) castShadowLights[castShadowLights.length] = light;
+                
                 this.shadingLights[this.lightsBatchSize++] = light;
                 updateShadingLights = this.lightsBatchSize === this.shadingLightsCount || i1 === lights.length - 1;
                 if (updateShadingLights) {
@@ -480,26 +486,37 @@ tge.engine = $extend(function (proto) {
 
 
 
-        var allMeshes = {
-            castShadowMeshes: null,
-            receiveShadowMeshes: null,
-            transparentMeshes: null,
-            opuqueMeshes: null,
-            flatMeshes: null,
-        }
 
 
 
         var postProcessOutput;
-        return function (camera, meshes, lights,cb) {
 
-            
+
+
+        function renderShadowDepth(camera, meshes) {
+            for (i4 = 0; i4 < meshes.length; i4++) {
+                mesh = meshes[i4];
+                if (!mesh.material.shader.depthShader) {
+                    mesh.material.shader.depthShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('normal-shadow-map-render')?>"), mesh.material.shader, true);
+                    mesh.material.shader.depthShader.shadowShader = true;
+                }
+                _this.useMaterial(mesh.material, mesh.material.shader.depthShader);
+                _this.activeShader.setUniform("tge_u_viewProjectionMatrix", camera.matrixWorldProjection);
+
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+        }
+
+        return function (camera, meshes, lights, cb) {
+
+            this.setDefaultViewport().clearScreen();
             if (this.isError) {
                 return;
             }
             currentCamera = camera;
 
-            castShadowLights.length = 0;
+
 
             time = performance.now();
             this.frameTimeDelta = this.frameTime - time;
@@ -512,15 +529,11 @@ tge.engine = $extend(function (proto) {
 
             _this = this;
 
-
-
+            castShadowLights.length = 0;
             if (meshes.sorted !== true) {
                 transparentMeshes.length = 0;
                 opuqueMeshes.length = 0;
                 flatMeshes.length = 0;
-                castShadowMeshes.length = 0;
-                receiveShadowMeshes.length = 0;
-
 
 
                 for (i4 = 0; i4 < meshes.length; i4++) {
@@ -529,20 +542,17 @@ tge.engine = $extend(function (proto) {
                     if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
                         transparentMeshes[transparentMeshes.length] = mesh;
                     }
-                    else if (mesh.material.flags & tge.SHADING.FLAT) {
-                        flatMeshes[flatMeshes.length] = mesh;
-
-                    }
                     else {
-                        opuqueMeshes[opuqueMeshes.length] = mesh;
+
+                        if (mesh.material.flags & tge.SHADING.FLAT) {
+                            flatMeshes[flatMeshes.length] = mesh;
+
+                        }
+                        else {
+                            opuqueMeshes[opuqueMeshes.length] = mesh;
+                        }
                     }
 
-                    if (mesh.material.flags & tge.SHADING.CAST_SHADOW) {
-                        castShadowMeshes[castShadowMeshes.length] = mesh;
-                    }
-                    if (mesh.material.flags & tge.SHADING.RECEIVE_SHADOW) {
-                        receiveShadowMeshes[receiveShadowMeshes.length] = mesh;
-                    }
 
                 }
 
@@ -551,6 +561,7 @@ tge.engine = $extend(function (proto) {
 
                 if (transparentMeshes.length > 0) {
                     transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);
+                    //transparentShadowCasters = $mergesort(transparentShadowCasters, transparentMeshSortFunc);
                 }
                 if (opuqueMeshes.length > 0) {
                     opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
@@ -559,7 +570,198 @@ tge.engine = $extend(function (proto) {
                 if (flatMeshes.length > 0) {
                     flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
                 }
-                
+
+                meshes.sorted = true;
+
+            }
+
+
+
+            this.postProcessTarget.display.setPosition(0, 0, -2);
+            this.postProcessTarget.display.parent = camera;
+            this.postProcessTarget.display.update();
+            this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+
+
+            if (opuqueMeshes.length > 0) {
+                _this.renderLighting(camera, lights, function (updateShadingLights) {
+                    for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
+                        mesh = opuqueMeshes[i4];
+
+
+
+                        if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                        }
+                        _this.activeShader.setUniform("tge_u_lightMap", 4);
+                        _this.useTexture(_this.postProcessTarget.colorTexture, 4);
+                        _this.updateModelViewMatrix(camera, mesh.model);
+                        _this.renderMesh(mesh);
+                    }
+
+                });
+            }
+
+            _this.disableFWRendering();
+            for (i4 = 0; i4 < flatMeshes.length; i4++) {
+                mesh = flatMeshes[i4];
+
+
+                if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                    _this.updateCameraUniforms(camera);
+                }
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+
+            // _this.enableFWRendering();
+            _this.gl.enable(_this.gl.BLEND);
+            _this.gl.blendFunc(_this.gl.ONE_MINUS_SRC_COLOR, _this.gl.ONE_MINUS_SRC_COLOR);
+          //  _this.gl.blendEquation(_this.gl.FUNC_REVERSE_SUBTRACT);
+            this.renderPostProcessQuad(this.shadowPostProcess, this._defaultRenderTarget, this.postProcessTarget.colorTexture);
+           // _this.gl.blendEquation(_this.gl.FUNC_ADD);
+            _this.gl.disable(_this.gl.BLEND);
+           // _this.disableFWRendering();
+            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+            for (i4 = 0; i4 < transparentMeshes.length; i4++) {
+                mesh = transparentMeshes[i4];
+
+                if (mesh.material.flags & tge.SHADING.SHADED) {
+                    if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                    _this.renderLighting(camera, lights, function (updateShadingLights) {
+
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateModelViewMatrix(camera, mesh.model);
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+
+                            if (_this.lightPassCount === 0) {
+                                _this.gl.enable(_this.gl.BLEND);
+                                _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                                _this.gl.cullFace(_this.gl.FRONT);
+                                _this.renderMesh(mesh);
+                                _this.gl.cullFace(_this.gl.BACK);
+                                _this.renderMesh(mesh);
+                            }
+                            else {
+                                _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                               _this.renderMesh(mesh);
+                            }
+                        }
+
+
+                    });
+                    _this.disableFWRendering();
+                }
+                else {
+                    if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                        _this.updateCameraUniforms(camera);
+                    }
+                    _this.updateModelViewMatrix(camera, mesh.model);
+                    _this.gl.enable(_this.gl.BLEND);
+                    _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                    _this.renderMesh(mesh);
+
+                }
+            }
+            _this.disableFWRendering();
+
+            this.defaultRenderTarget = this.postProcessTarget;
+            this.setDefaultViewport().clearScreen();
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes, i4 > 0 ? true : false);
+
+            }
+
+
+          
+
+            this.defaultRenderTarget = this._defaultRenderTarget;
+
+
+
+            
+
+            postProcessOutput = this.defaultRenderTarget.colorTexture;
+            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
+
+
+            _this.textureSlots[0] = -1;
+            _this.updateTextures();
+
+
+        }
+
+
+
+        return function (camera, meshes, lights, cb) {
+
+            this.setDefaultViewport().clearScreen();
+            if (this.isError) {
+                return;
+            }
+            currentCamera = camera;
+
+
+
+            time = performance.now();
+            this.frameTimeDelta = this.frameTime - time;
+            this.frameTime = time;
+            this.lastShaderId = -1;
+
+
+            this.tge_u_pipelineParams[0] = this.frameTime;
+            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
+
+            _this = this;
+
+            castShadowLights.length = 0;
+            if (meshes.sorted !== true) {
+                transparentMeshes.length = 0;
+                opuqueMeshes.length = 0;
+                flatMeshes.length = 0;
+             
+
+                for (i4 = 0; i4 < meshes.length; i4++) {
+                    mesh = meshes[i4];
+
+                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                        transparentMeshes[transparentMeshes.length] = mesh;
+                    }
+                    else {
+
+                        if (mesh.material.flags & tge.SHADING.FLAT) {
+                            flatMeshes[flatMeshes.length] = mesh;
+
+                        }
+                        else {
+                            opuqueMeshes[opuqueMeshes.length] = mesh;
+                        }
+                    }
+
+
+                }
+
+
+
+
+                if (transparentMeshes.length > 0) {
+                    transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);
+                    //transparentShadowCasters = $mergesort(transparentShadowCasters, transparentMeshSortFunc);
+                }
+                if (opuqueMeshes.length > 0) {
+                    opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
+                }
+
+                if (flatMeshes.length > 0) {
+                    flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
+                }
+
                 meshes.sorted = true;
 
             }
@@ -593,21 +795,24 @@ tge.engine = $extend(function (proto) {
             for (i4 = 0; i4 < flatMeshes.length; i4++) {
                 mesh = flatMeshes[i4];
 
+
                 if (_this.useMaterial(mesh.material, mesh.material.shader)) {
-                     _this.updateCameraUniforms(camera);
+                    _this.updateCameraUniforms(camera);
                 }
                 _this.updateModelViewMatrix(camera, mesh.model);
                 _this.renderMesh(mesh);
             }
 
 
+
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];
+
                 if (mesh.material.flags & tge.SHADING.SHADED) {
                     if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
                     _this.renderLighting(camera, lights, function (updateShadingLights) {
 
-                        if (_this.useMaterial(mesh.material,mesh.material.shader) || updateShadingLights) {
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
                             updateShadingLights = false;
                             _this.updateModelViewMatrix(camera, mesh.model);
                             _this.updateCameraUniforms(camera);
@@ -643,29 +848,14 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-            this.lastShaderId = -1;
-
-            /*
-            for (i1 = 0; i1 < lights.length; i1++) {
-                light = lights[i1];
-                if (light.castShadows) {
-                    light.renderShadows(this, camera, castShadowMeshes, receiveShadowMeshes);
-                }
-            }
-            */
-            allMeshes.castShadowMeshes = castShadowMeshes;
-            allMeshes.receiveShadowMeshes = receiveShadowMeshes;
-            allMeshes.transparentMeshes = transparentMeshes;
-            allMeshes.opuqueMeshes = opuqueMeshes;
-            allMeshes.flatMeshes = flatMeshes;
-
-            if (castShadowLights.length > 0) {
-                tge.light.castShadows(castShadowLights, this, camera, allMeshes);
-            }
 
 
-           
-            
+
+
+
+
+
+
 
 
 
@@ -673,7 +863,7 @@ tge.engine = $extend(function (proto) {
 
 
             if (cb) {
-              
+
                 cb(this, camera, lights, allMeshes);
 
             }
@@ -692,9 +882,9 @@ tge.engine = $extend(function (proto) {
                 }
             }
             */
-            
 
-            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
+
+           // this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
 
 
 
@@ -703,11 +893,195 @@ tge.engine = $extend(function (proto) {
 
 
         }
+        return function (camera, meshes, lights, cb) {
+
+
+            if (this.isError) {
+                return;
+            }
+            currentCamera = camera;
+
+
+            time = performance.now();
+            this.frameTimeDelta = this.frameTime - time;
+            this.frameTime = time;
+            this.lastShaderId = -1;
+
+
+            this.tge_u_pipelineParams[0] = this.frameTime;
+            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
+
+            _this = this;
+
+           
+            if (meshes.sorted !== true) {
+                transparentMeshes.length = 0;
+                opuqueMeshes.length = 0;
+                flatMeshes.length = 0;
+                
+                
+                for (i4 = 0; i4 < meshes.length; i4++) {
+                    mesh = meshes[i4];
+                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                        transparentMeshes[transparentMeshes.length] = mesh;                        
+                    }
+                    else if (mesh.material.flags & tge.SHADING.FLAT) {
+                        flatMeshes[flatMeshes.length] = mesh;
+                    }
+                    else {
+                        opuqueMeshes[opuqueMeshes.length] = mesh;
+                    }
+
+                }
+
+               
+
+
+                if (transparentMeshes.length > 0) {
+                    transparentMeshes = $mergesort(transparentMeshes, transparentMeshSortFunc);                   
+                }
+                if (opuqueMeshes.length > 0) {
+                    opuqueMeshes = $mergesort(opuqueMeshes, solidMeshSortFunc);
+                }
+
+                if (flatMeshes.length > 0) {
+                    flatMeshes = $mergesort(flatMeshes, solidMeshSortFunc);
+                }
+
+                meshes.sorted = true;
+
+            }
+
+          //  this.defaultRenderTarget = this.postProcessTarget;
+            this.setDefaultViewport().clearScreen();
+
+           
+            renderShadowDepth(camera, opuqueMeshes);
+           // this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+            renderShadowDepth(camera, transparentMeshes);
+            this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+            for (i4 = 0; i4 < lights.length; i4++) {
+                light = lights[i4];
+                if (light.castShadows) light.renderShadows(this, camera, opuqueMeshes, transparentMeshes);
+
+            }
+            
+           // this.defaultRenderTarget = this._defaultRenderTarget;
+           // this.setDefaultViewport().clearScreen();
+
+
+            this.postProcessTarget.display.setPosition(0, 0, -2);
+            this.postProcessTarget.display.parent = camera;
+            this.postProcessTarget.display.update();
+           // this.renderSingleMesh(camera, this.postProcessTarget.display.meshes[0]);
+
+           _this.enableFWRendering();
+                       
+            if (opuqueMeshes.length > 0) {
+                _this.renderLighting(camera, lights, function (updateShadingLights) {
+                    for (i4 = 0; i4 < opuqueMeshes.length; i4++) {
+                        mesh = opuqueMeshes[i4];
+
+
+
+                        if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                           // _this.activeShader.setUniform("tge_u_lightMap", 4);
+                            
+                        }
+                        
+                        _this.updateModelViewMatrix(camera, mesh.model);
+                        _this.renderMesh(mesh);
+                    }
+
+                });
+            }
+
+
+           // _this.disableFWRendering();
+            for (i4 = 0; i4 < flatMeshes.length; i4++) {
+                mesh = flatMeshes[i4];
+
+
+                if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                    _this.updateCameraUniforms(camera);
+                }
+                _this.updateModelViewMatrix(camera, mesh.model);
+                _this.renderMesh(mesh);
+            }
+
+
+
+            for (i4 = 0; i4 < transparentMeshes.length; i4++) {
+                mesh = transparentMeshes[i4];
+
+                if (mesh.material.flags & tge.SHADING.SHADED) {
+                    if (_this.lightPassCount >= mesh.material.lightPassLimit) continue;
+                    _this.renderLighting(camera, lights, function (updateShadingLights) {
+
+                        if (_this.useMaterial(mesh.material, mesh.material.shader) || updateShadingLights) {
+                            updateShadingLights = false;
+                            _this.updateModelViewMatrix(camera, mesh.model);
+                            _this.updateCameraUniforms(camera);
+                            _this.updateShadingLights(camera);
+                            
+                        }
+                        if (_this.lightPassCount === 0) {
+                            _this.gl.enable(_this.gl.BLEND);
+                            _this.gl.blendFunc(_this.gl.DST_ALPHA, _this.gl.DST_ALPHA);
+                            // _this.gl.cullFace(_this.gl.FRONT);
+                            //  _this.renderMesh(mesh);
+                            // _this.gl.cullFace(_this.gl.BACK);
+                            _this.renderMesh(mesh);
+                            _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                        }
+                        else {
+                            // _this.gl.blendFunc(_this.gl.ONE, _this.gl.ONE);
+                            // _this.renderMesh(mesh);
+                        }
+
+                    });
+                   // _this.disableFWRendering();
+                }
+                else {
+                    if (_this.useMaterial(mesh.material, mesh.material.shader)) {
+                        _this.updateCameraUniforms(camera);
+                    }
+                    _this.updateModelViewMatrix(camera, mesh.model);
+                    _this.gl.enable(_this.gl.BLEND);
+                    _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                    _this.renderMesh(mesh);
+
+                }
+            }
+            _this.disableFWRendering();
+
+
+            postProcessOutput = this.defaultRenderTarget.colorTexture;
+
+
+            //this.renderPostProcessQuad(tge.engine.defaultPostProcessShader.process, null, postProcessOutput);
+
+
+
+            _this.textureSlots[0] = -1;
+            _this.updateTextures();
+
+
+        }
+
+
+
+
     })();
     var fq = tge.geometry.quad2D();
     proto.renderPostProcessQuad = (function () {
         var shader;
-        return function (process, target, texture_input) {
+        return function (shader, target, texture_input) {
 
             if (target == null) {
                 this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -716,7 +1090,7 @@ tge.engine = $extend(function (proto) {
             else {
                 target.bind();
             }
-            shader = process(this);
+
 
             if (this.lastShaderId !== shader.uuid) this.useShader(shader);
             this.useGeometry(fq);

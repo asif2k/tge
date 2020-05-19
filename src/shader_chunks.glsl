@@ -313,9 +313,20 @@ void fragment(void) {
 /*chunk-normal-shadow-map-render*/
 <?=chunk('precision')?>
 
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
+uniform mat4 tge_u_objectMaterial;
+
 void fragment(void) {	
-	gl_FragColor = vec4(1.0);
+
+
+	if(texture2D(tge_u_ambientTexture, tge_v_uv).w<0.02) discard;
+	
+	gl_FragColor=vec4(1.0);
+	
+
 }
+
 
 /*chunk-variance-cascade-shadow-receiver*/
 
@@ -404,7 +415,8 @@ void vertex(){
 <?=chunk('variance-shadow-sampling')?>
 
 uniform mat4 tge_u_lightCameraMatrix;
- vec4 tge_v_shadow_light_vertex;
+vec4 tge_v_shadow_light_vertex;
+
 varying vec4 tge_v_shadow_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
@@ -458,6 +470,7 @@ fws_directionToEye=normalize(tge_u_light_dir);
 
 void fragment(void) {	
 	gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
+	
 }
 
 
@@ -484,7 +497,7 @@ void vertex(){
 
 
 <?=chunk('precision')?>
-<?=chunk('variance-shadow-sampling')?>
+<?=chunk('shadow-sampling')?>
 
 
 varying vec3 tge_v_normal;
@@ -493,13 +506,26 @@ varying vec4 tge_v_shadow_light_vertex;
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
 uniform vec3 tge_u_light_dir;
+uniform mat4 tge_u_objectMaterial;
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
 
-float getShadowSample() {	
-	if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;
+float getShadowSample() {		
+	if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;	
+
 	vec3 shadowMapCoords=tge_v_shadow_light_vertex.xyz;	
 	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
 	if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
 	
+
+
+	return texture2D(tge_u_shadowMap, shadowMapCoords.xy).r> shadowMapCoords.z-0.0001  ? 0.0 : 0.5;
+	return 0.5-SampleShadowMapPCF(tge_u_shadowMap, shadowMapCoords.xy,shadowMapCoords.z,vec2(1.0/1024.0));
+
+	  return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
+    0.0000001,0.000000);
+	
+	 
 	float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
 
 		
@@ -511,5 +537,19 @@ float getShadowSample() {
 
 
 void fragment(void) {	
-	gl_FragColor = vec4(tge_u_shadow_params.y)* getShadowSample();
+
+
+	gl_FragColor = vec4(0.65)*(0.5-getShadowSample());
+	gl_FragColor.w *= tge_u_objectMaterial[0].w;
+
+}
+
+
+/*chunk-shadow-post-process*/
+void fragment(){
+	super_fragment();
+	if(tge_v_uv.x>0.5){
+		
+
+	}
 }

@@ -79,17 +79,19 @@ tge.material = $extend(function (proto,_super) {
 
     proto.renderMesh = function (engine, shader, mesh) {
 
-        if (!shader.shadowShader) {
-            if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
-                engine.useTexture(this.ambientTexture, 0);
-                if (shader.setUniform("tge_u_normalMap", 1)) {
-                    engine.useTexture(this.normalMap, 1);
-                }
-                if (shader.setUniform("tge_u_dispMap", 2)) {
-                    engine.useTexture(this.dispMap, 2);
-                }
-                shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
+        if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
+            engine.useTexture(this.ambientTexture, 0);
+            if (shader.setUniform("tge_u_normalMap", 1)) {
+                engine.useTexture(this.normalMap, 1);
             }
+            if (shader.setUniform("tge_u_dispMap", 2)) {
+                engine.useTexture(this.dispMap, 2);
+            }
+            shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
+        }
+        else {
+            engine.useTexture(this.ambientTexture, 0);
+            shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
         }
         
 

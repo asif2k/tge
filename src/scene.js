@@ -23,7 +23,7 @@ tge.render_list = $extend(function (proto, _super) {
             model = models[i1];
             if ((model.flags & flags) !== 0) {
                 model.update();
-
+               
                 if (!model.enabling) continue;
                // console.log(model);
                 this.updateModelViewMatrix(camera, model);
@@ -31,11 +31,8 @@ tge.render_list = $extend(function (proto, _super) {
                     
                     for (i2 = 0; i2 < model.meshes.length; i2++) {
                         mesh = model.meshes[i2];
-                        mesh.camZ = model.modelViewPosition[2];
-                        if (mesh.modelMatrix) {
-                            tge.mat4.mul(tempMatrix, camera.matrixWorldInvserse, mesh.modelMatrix);
-                            mesh.camZ = tempMatrix[14];
-                        }
+                        mesh.cameraDistance = model.modelViewPosition[2];
+
                         this.meshes[this.meshes.length] = mesh;
                     }
                 }

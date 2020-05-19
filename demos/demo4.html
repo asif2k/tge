@@ -10,15 +10,15 @@
  
   <script>
 
-    tge.demo({ fws_lightsCount: 8, pixelRatio1:1}, function (app, engine, scene, camera) {
+    tge.demo({ fws_lightsCount: 2, pixelRatio1:1}, function (app, engine, scene, camera) {
       var light0 = scene.addLight(new tge.light(), function (lg) {
         lg.setPosition(0, 5, 0);
         lg.setDiffuse(0.685, 0.685, 0.685);
         lg.setAmbient(0.64338, 0.64338, 0.64338).setSpecular(0.185, 0.185, 0.185).setIntensity(1);
         //lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
         lg.setRotation(-0.613335132598877,0,0);
-        lg.shadowMapSize = 2048;
-        lg.shadowCameraDistance = 20;
+        lg.shadowMapSize = 1024;
+        lg.shadowCameraDistance = 15;
         lg.castShadows = true;     
        // lg.enableCascadeShadow([10, 30,140], 512, camera);
        // lg.enabled = false;
@@ -26,27 +26,57 @@
 
       });
 
+      var light1 = scene.addLight(new tge.light(), function (lg) {
+        lg.setPosition(3, 5, 0);
+        lg.setDiffuse(0.685, 0.685, 0.685);
+        lg.setAmbient(0.264338, 0.264338, 0.264338).setSpecular(0.185, 0.185, 0.185).setIntensity(1);
+        //lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
+        lg.setRotation(-0.613335132598877, 0, 0);
+        lg.shadowMapSize = 1024;
+        lg.shadowCameraDistance = 15;
+       // lg.castShadows = true;
+        // lg.enableCascadeShadow([10, 30,140], 512, camera);
+        // lg.enabled = false;
+        scene.addModel(lg.getDisplay());
+
+      });
+
       tge.geometry.wavefront_obj_url("models/mon2.obj", function (geo) {
         scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
-          md.setPosition(3, 0.5, 0);
+          md.setPosition(7, 0.5, 0);
           mesh.material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
         });
       });
-      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.phong_material()), function (md, mesh) {
         md.setPosition(0, -0.5, 0);
         mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
         tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0,64, 64, 0);
 
-        tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0,32, 32, 0);
+     //   tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0,32, 32, 0);
         mesh.material.normalMap = tge.texture.from_url('textures/nm1.jpg');
         mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW); //.setAmbientRandom();
-        //mesh.material.ambientTexture = tge.texture.from_url('textures/tex4.jpg');
+        mesh.material.ambientTexture = tge.texture.from_url('textures/tex4.jpg');
         md.setRotation(-90 * tge.DEGTORAD, 0, 0);
       });
 
-      scene.createRandomModelsGrid(50, 10, function (md) {
-        md.position[1] = Math.random() * 4;
+      
+      scene.addModel(new tge.model(tge.geometry.cube({size:5}), new tge.phong_material()), function (md, mesh) {
+        md.setPosition(5, 2.2, 3);
+        //mesh.material.setTansparency(0);
+       mesh.material.setFlag(tge.SHADING.TRANSPARENT).setFlag(tge.SHADING.RECEIVE_SHADOW).setFlag(tge.SHADING.CAST_SHADOW);
+        //setFlag(tge.SHADING.RECEIVE_SHADOW).setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.TRANSPARENT).
+        mesh.material.ambientTexture = tge.texture.from_url('textures/a3.png');
+        
+      });
+      
+      scene.createRandomModelsGrid(50, 10, function (md,i) {
+       // md.position[1] = Math.random() * 4;
         md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
+
+        if (Math.floor(Math.random() * 5) == 1) {
+          md.meshes[0].material.setTansparency(0.8);
+        }
+        
         return;
 
 
@@ -93,7 +123,7 @@
         }
         scene.updateRenderList(camera);
 
-        engine.setDefaultViewport().clearScreen();
+        
         engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
 
 

@@ -118,12 +118,14 @@ tge.demo = function (parameters, cb) {
         geos.push(tge.geometry.cube({ size: 2 }));
         geos.push(tge.geometry.sphere());
         material = material || tge.phong_material;
+        var cc = 0;
         for (var x = -range; x <= range; x += step) {
             for (var z = -range; z <= range; z += step) {
                 scene.addModel(new tge.model(geos[Math.floor(Math.random() * geos.length)], new material()), function (md, mesh) {
                     md.setPosition(x, 0, z);
                     mesh.material.setAmbientRandom();
-                    onModel(md);
+                    onModel(md, cc);
+                    cc++;
                 });
             }
         }
