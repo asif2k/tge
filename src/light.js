@@ -162,11 +162,9 @@ tge.light = $extend(function (proto, _super) {
                     }
                     if (engine.useMaterial(mesh.material, mesh.material.shader.depthShader)) {
 
-
                     }    
                     engine.activeShader.setUniform("tge_u_shadowColor", tge_u_shadowColor);
-
-                    engine.activeShader.setUniform("tge_u_viewProjectionMatrix", light_camera.matrixWorldProjection);
+                    engine.updateCameraUniforms(light_camera);
                     engine.updateModelViewMatrix(light_camera, mesh.model);                    
                     engine.renderMesh(mesh);
                 }
@@ -215,7 +213,7 @@ tge.light = $extend(function (proto, _super) {
       
 
 
-        
+        var totalShadowCasters = 0;
         return function (engine, camera, opuqueMeshes, transparentMeshes) {
             light = this;
             shadow_map = getShadowMap(engine.gl, light.shadowMapSize);                                    
@@ -261,13 +259,14 @@ tge.light = $extend(function (proto, _super) {
             shadow_map.bind();
 
 
-            
-            
             engine.gl.cullFace(engine.gl.FRONT);
-            renderShadowCasters(engine, light, light_camera, opuqueMeshes);         
-            engine.gl.enable(engine.gl.BLEND);
-            engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
-            renderShadowCasters(engine, light, light_camera, transparentMeshes);
+            totalShadowCasters=renderShadowCasters(engine, light, light_camera, opuqueMeshes);
+            if (transparentMeshes.length > 0) {
+                engine.gl.enable(engine.gl.BLEND);
+                engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+                totalShadowCasters=+renderShadowCasters(engine, light, light_camera, transparentMeshes);
+            }
+            
             engine.gl.cullFace(engine.gl.BACK);
 
 
@@ -280,16 +279,21 @@ tge.light = $extend(function (proto, _super) {
 
             light.getShadowLightPos(tge_u_light_pos);
 
+            if (totalShadowCasters > 0) {
+                engine.enableFWRendering();
+                engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
+                engine.useTexture(shadow_map.depthTexture, 1);
+                engine.useTexture(shadow_map.colorTexture, 2);
+                renderShadowReceivers(engine, light, light_camera, camera, opuqueMeshes);
+                if (transparentMeshes.length > 0) {
+                    engine.gl.depthFunc(engine.gl.LESS);
+                    renderShadowReceivers(engine, light, light_camera, camera, transparentMeshes);
+                }
+                engine.gl.blendEquation(engine.gl.FUNC_ADD);
+                engine.disableFWRendering();
+            }
             
-            engine.enableFWRendering();            
-            engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
-            engine.useTexture(shadow_map.depthTexture, 1);
-            engine.useTexture(shadow_map.colorTexture, 2);
-            renderShadowReceivers(engine, light, light_camera, camera, opuqueMeshes);
-            engine.gl.depthFunc(engine.gl.LESS);
-            renderShadowReceivers(engine, light, light_camera, camera, transparentMeshes);
-            engine.gl.blendEquation(engine.gl.FUNC_ADD);
-            engine.disableFWRendering();
+            
             
 
             /*

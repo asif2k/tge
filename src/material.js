@@ -93,7 +93,26 @@ tge.material = $extend(function (proto,_super) {
             engine.useTexture(this.ambientTexture, 0);
             shader.setUniform("tge_u_textureMatrix", this.textureMatrix);
         }
-        
+
+
+        if (shader.shadowShader) {
+            if ((this.flags & tge.SHADING.SHADOW_DOUBLE_SIDES) !== 0) {
+                engine.gl.disable(engine.gl.CULL_FACE);
+            }
+            else {
+                engine.gl.enable(engine.gl.CULL_FACE);
+            }
+        }
+        else {
+            if ((this.flags & tge.SHADING.DOUBLE_SIDES) !== 0) {
+                engine.gl.disable(engine.gl.CULL_FACE);
+            }
+            else {
+                engine.gl.enable(engine.gl.CULL_FACE);
+            }
+        }
+
+      
 
         engine.updateModelUniforms(mesh.model);
         mesh.drawCount = mesh.geo.numItems;
@@ -113,6 +132,8 @@ tge.material = $extend(function (proto,_super) {
         else {
             engine.gl.enable(engine.gl.DEPTH_TEST);
         }
+
+      
     };
     proto.clone = function () {
         var mat = new tge.material();

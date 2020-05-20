@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>   
+</head>
+<body>
+  
+  <script src="../tge.js"></script>
+ 
+  <script>
+
+    tge.demo({ fws_lightsCount:16, pixelRatio1:1}, function (app, engine, scene, camera) {
+      var light0 = scene.addLight(new tge.light(), function (lg) {
+        lg.setPosition(0, 5, 0);
+        lg.setDiffuse(0.3685, 0.3685, 0.3685);
+        lg.setAmbient(0.364338, 0.364338, 0.364338).setSpecular(0.185, 0.185, 0.185).setIntensity(5);
+        //lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
+        lg.setRotation(-0.613335132598877,1,0);
+        lg.shadowMapSize = 2048;
+        lg.shadowCameraDistance = 20;
+        lg.castShadows = true;     
+       // lg.enableCascadeShadow([10, 30,140], 512, camera);
+       // lg.enabled = false;
+        scene.addModel(lg.getDisplay());
+
+      });
+
+
+
+      tge.geometry.wavefront_obj_url("models/mon2.obj", function (geo) {
+        scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
+          md.setPosition(7, 0.5, 0);
+          mesh.material.setFlag(tge.SHADING.CAST_SHADOW+tge.SHADING.RECEIVE_SHADOW);
+        });
+      });
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+        md.setPosition(0, -0.5, 0);
+        mesh.material.setAmbient(0.8455, 0.8455, 0.8455).setSpecular(0, 0, 0);
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0,64, 64, 0);
+
+        tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0,32, 32, 0);
+        //mesh.material.normalMap = tge.texture.from_url('textures/norm6.jpg');
+        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW); //.setAmbientRandom();
+        mesh.material.ambientTexture = tge.texture.from_url('textures/tex4.jpg');
+        md.setRotation(-90 * tge.DEGTORAD, 0, 0);
+      });
+
+      
+      scene.addModel(new tge.model(tge.geometry.plane({ width: 50, height: 8 }), new tge.material()), function (md, mesh) {
+        md.setPosition(5, 2.8, 3);    
+        md.scale[1] = -1;
+        mesh.material.setAmbient(0.8455, 0.8455, 0.8455).setSpecular(0, 0, 0);
+       tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0.1, 15, 1, 0);
+        mesh.material.setFlag(
+          tge.SHADING.TRANSPARENT + tge.SHADING.CAST_SHADOW + tge.SHADING.DOUBLE_SIDES+    tge.SHADING.SHADOW_DOUBLE_SIDES);
+        mesh.material.normalMap = tge.texture.from_url('textures/norm4.jpg');
+       // tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0, 32, 32, 0);
+        mesh.material.ambientTexture = tge.texture.from_url('textures/a4.png');
+        
+      });
+      
+
+      scene.createRandomModelsGrid(50, 12, function (md,i) {
+        md.position[1] = Math.random() * 3;
+        md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW+tge.SHADING.RECEIVE_SHADOW);
+       // md.meshes[0].material.setAmbient(0, 0, 0);
+        if (Math.floor(Math.random() * 3) == 1) {
+          
+        //  md.meshes[0].material.setFlag(tge.SHADING.DOUBLE_SIDES);
+          md.meshes[0].material.setTansparency(0.7);
+          //md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r5.jpg');
+        }
+        return;
+        if (Math.floor(Math.random() * 3) == 1) {
+          md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+          scene.addLight(new tge.spot_light(), function (lg) {
+            lg.setPosition(0, md.position[1]+4, 0);
+            lg.setDiffuse(0.5, 0.5, 0.5);
+            lg.setAmbient(0.3, 0.3, 0.3).setSpecular(0.75, 0.75, 0.75).setIntensity(2);
+            lg.setAttenuationByDistance(Math.random()*30+30);
+           // lg.setDiffuseRandom();
+            lg.setRotation(-90 * tge.DEGTORAD, 0, 0);
+            lg.parent = md;
+           //  lg.castShadows = true;
+            // scene.addModel(lg.getDisplay());
+
+          });
+        }
+
+
+       
+
+
+      
+
+
+      }, tge.phong_material);
+
+
+      app.mouseDrage2 = (function (base) {
+        return function (dx, dy, e) {
+          if (!e.ctrlKey) return base.apply(this, arguments);
+          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
+        }
+      })(app.mouseDrage2);
+
+      app.mouseWheel = (function (base) {
+        return function (sp, e) {
+          if (e.buttons === 2) light0.moveFrontBack(-0.005 * sp);
+          else base.apply(this, arguments);
+        }
+      })(app.mouseWheel);
+
+
+
+
+      camera.setPosition(-4.322909832000732, 23.915023803710938, 39.11167526245117);
+      camera.setRotation(-0.9999994039535522, 0.01399976760149002, 0);
+
+
+      app.playLoop(function (delta, time) {
+        if (light0.version <3) light0.version++;
+
+
+        if (camera.update()) {
+          scene.renderList.meshes.sorted = false;
+        }
+        scene.updateRenderList(camera);
+
+
+        engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
+
+
+      }, 16);
+
+    });
+
+
+  </script>
+
+</body>
+</html>

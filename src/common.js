@@ -319,7 +319,8 @@ $assign(tge, {
         OPUQUE: 256,
         DEPTH_TEST: 512,
         NO_DEPTH_TEST: 1024,
-        ALPHA_TEXTURE: 2048,
+        DOUBLE_SIDES: 2048,
+        SHADOW_DOUBLE_SIDES: 4096,
 
     },
     OBJECT_TYPES: {
