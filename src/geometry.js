@@ -365,28 +365,34 @@ tge.geometry = $extend(function (proto) {
             itemSize: 2, offset: 0
         });
         g.numItems =4;        
-        g.geoType = "quad2d";
+        g.geoType = "quad2D";
         return (g);
     };
 
 
-    geometry.quad = function () {
+    geometry.quad3D = function () {
         var g = new geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, 1, 0, 0, 0, 1, 0, 1,
+
                 -1, -1, 0, 0, 0, 1, 0, 0,
+
                 1, -1, 0, 0, 0, 1, 1, 0,
+
                 1, -1, 0, 0, 0, 1, 1, 0,
+
                 1, 1, 0, 0, 0, 1, 1, 1,
+
                 -1, 1, 0, 0, 0, 1, 0, 1,
+
             ]),
             itemSize: 3, offset: 0, stride: 8 * 4
         });
         g.numItems = 6;
         g.addAttribute("tge_a_normal", { itemSize: 3, offset: 3 * 4, stride: 8 * 4 });
         g.addAttribute("tge_a_uv", { itemSize: 2, offset: 6 * 4, stride: 8 * 4 });
-        g.geoType = "quad";
+        g.geoType = "quad3D";
         return (g);
     };
 

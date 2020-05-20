@@ -123,7 +123,7 @@ tge.demo = function (parameters, cb) {
             for (var z = -range; z <= range; z += step) {
                 scene.addModel(new tge.model(geos[Math.floor(Math.random() * geos.length)], new material()), function (md, mesh) {
                     md.setPosition(x, 0, z);
-                    mesh.material.setAmbientRandom();
+                    mesh.material.setDiffuseRandom();
                     onModel(md, cc);
                     cc++;
                 });

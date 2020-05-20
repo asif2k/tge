@@ -310,19 +310,23 @@ void fragment(void) {
 	gl_FragColor = vec4(depth, moment2, 0.0, 0.0);
 }
 
-/*chunk-normal-shadow-map-render*/
+/*chunk-color-shadow-map-render*/
 <?=chunk('precision')?>
 
 uniform sampler2D tge_u_ambientTexture;
 varying vec2 tge_v_uv;
 uniform mat4 tge_u_objectMaterial;
+uniform vec4 tge_u_shadowColor;
 
 void fragment(void) {	
 
+vec4 c=texture2D(tge_u_ambientTexture, tge_v_uv);
 
-	if(texture2D(tge_u_ambientTexture, tge_v_uv).w<0.02) discard;
-	
-	gl_FragColor=vec4(1.0);
+	if(c.w<0.02) discard;
+	c.rgb=(1.0-c.rgb);
+	//c.rgb*=(0.5-tge_u_shadowColor.w);
+	gl_FragColor=mix(vec4(1.0),1.0-tge_u_shadowColor,1.0-tge_u_shadowColor.a);
+	gl_FragColor=mix(gl_FragColor,c,1.0-c.a);
 	
 
 }
@@ -505,43 +509,36 @@ varying vec4 tge_v_shadow_light_vertex;
 
 uniform sampler2D tge_u_shadowMap;
 uniform vec4 tge_u_shadow_params;
-uniform vec3 tge_u_light_dir;
+uniform vec3 tge_u_light_pos;
 uniform mat4 tge_u_objectMaterial;
 uniform sampler2D tge_u_ambientTexture;
 varying vec2 tge_v_uv;
 
+
+
 float getShadowSample() {		
-	if(-(dot(tge_v_normal,tge_u_light_dir))>0.0) return 0.0;	
 
-	vec3 shadowMapCoords=tge_v_shadow_light_vertex.xyz;	
-	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
-	if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
+
+	float f=texture2D(tge_u_ambientTexture, tge_v_uv).a;
+	f*=step(-(dot(tge_v_normal,normalize(tge_u_light_pos - tge_v_shadow_light_vertex.xyz))),0.0);
+	f*=step(tge_v_shadow_light_vertex.x,1.0)*step(tge_v_shadow_light_vertex.y,1.0)*step(tge_v_shadow_light_vertex.z,1.0);
+	f*=step(0.0,tge_v_shadow_light_vertex.x)*step(0.0,tge_v_shadow_light_vertex.y)*step(0.0,tge_v_shadow_light_vertex.y);
+
 	
+	//return (0.5*f)-step(tge_v_shadow_light_vertex.z-0.0001, texture2D(tge_u_shadowMap,tge_v_shadow_light_vertex.xy).r)*f;
 
 
-	//return texture2D(tge_u_shadowMap, shadowMapCoords.xy).r> shadowMapCoords.z-0.0001  ? 0.0 : 0.5;
-	return 0.5-SampleShadowMapPCF(tge_u_shadowMap, shadowMapCoords.xy,shadowMapCoords.z,vec2(1.0/1024.0));
 
-	  return 0.5- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
-    0.0000001,0.000000);
-	
-	 
-	float d = texture2D(tge_u_shadowMap, shadowMapCoords.xy).r;
+	return (0.5*f)-SampleShadowMapPCF(tge_u_shadowMap, tge_v_shadow_light_vertex.xy,tge_v_shadow_light_vertex.z,vec2(1.0/2048.0))*f;
 
-		
-
-
-	return d > shadowMapCoords.z-0.0001  ? 0.0 : 0.5;
 		
 }
 
 
 void fragment(void) {	
 
-if(texture2D(tge_u_ambientTexture, tge_v_uv).w<0.0002) discard;
-	gl_FragColor = vec4(0.25*getShadowSample());
-	
-	//gl_FragColor.w *= tge_u_objectMaterial[0].w*texture2D(tge_u_ambientTexture, tge_v_uv).w;
+gl_FragColor = vec4(0.2*(getShadowSample()));
+
 }
 
 
