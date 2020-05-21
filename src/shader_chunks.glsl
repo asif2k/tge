@@ -211,64 +211,84 @@ void fragment(){
 	}
 }
 
-/*chunk-pp2*/
-float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare)
-{
-	return step(compare, texture2D(shadowMap, coords.xy).r);
-}
-float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
-{
-	vec2 pixelPos = coords/texelSize + vec2(0.5);
-	vec2 fracPart = fract(pixelPos);
-	vec2 startTexel = (pixelPos - fracPart) * texelSize;
-	
-	float blTexel = SampleShadowMap(shadowMap, startTexel, compare);
-	float brTexel = SampleShadowMap(shadowMap, startTexel + vec2(texelSize.x, 0.0), compare);
-	float tlTexel = SampleShadowMap(shadowMap, startTexel + vec2(0.0, texelSize.y), compare);
-	float trTexel = SampleShadowMap(shadowMap, startTexel + texelSize, compare);
-	
-	float mixA = mix(blTexel, tlTexel, fracPart.y);
-	float mixB = mix(brTexel, trTexel, fracPart.y);
-	
-	return mix(mixA, mixB, fracPart.x);
-}
-float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
-{
-	const float NUM_SAMPLES = 3.0;
-	const float SAMPLES_START = (NUM_SAMPLES-1.0)/2.0;
-	const float NUM_SAMPLES_SQUARED = NUM_SAMPLES*NUM_SAMPLES;
 
-	float result = 0.0;
-	for(float y = -SAMPLES_START; y <= SAMPLES_START; y += 1.0)
-	{
-		for(float x = -SAMPLES_START; x <= SAMPLES_START; x += 1.0)
-		{
-			vec2 coordsOffset = vec2(x,y)*texelSize;
-			result += SampleShadowMapLinear(shadowMap, coords + coordsOffset, compare, texelSize);
-		}
-	}
-	return result/NUM_SAMPLES_SQUARED;
+/*chunk-post-process-pa*/
+
+uniform mat3 tge_u_pa_params;
+
+void fragment(){	
+	vec4 c = texture2D(tge_u_texture_input, tge_v_uv);
+    if (c.a > 0.0) {
+
+		float gamma=tge_u_pa_params[0].x;
+		float contrast=tge_u_pa_params[0].y;
+		float saturation=tge_u_pa_params[0].z;
+		float brightness=tge_u_pa_params[1].x;
+		float red=tge_u_pa_params[1].y;
+		float green=tge_u_pa_params[1].z;
+		float blue=tge_u_pa_params[2].x;
+		
+        c.rgb /= c.a;
+
+        vec3 rgb = pow(c.rgb, vec3(1. / gamma));
+        rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
+        rgb.r *= red;
+        rgb.g *= green;
+        rgb.b *= blue;
+        c.rgb = rgb * brightness;
+
+        c.rgb *= c.a;
+    }
+	float alpha=tge_u_pa_params[2].y;
+    gl_FragColor = c * alpha;
 }
 
-/*chunk-variance-shadow-sampling*/
-
-float linstep(float low, float high, float v)
+/*chunk-post-process-fxaa*/
+uniform vec3 tge_u_inverseFilterTextureSize;
+uniform vec3 tge_u_fxaa_params;
+void fragment()
 {
-	return clamp((v - low) / (high - low), 0.0, 1.0);
+
+	float R_fxaaSpanMax=tge_u_fxaa_params.x;
+	float R_fxaaReduceMin=tge_u_fxaa_params.y;
+	float R_fxaaReduceMul=tge_u_fxaa_params.z;	
+	vec2 texCoordOffset = tge_u_inverseFilterTextureSize.xy;
+	vec3 luma = vec3(0.299, 0.587, 0.114);	
+	float lumaTL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0, -1.0) * texCoordOffset)).xyz);
+	float lumaTR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, -1.0) * texCoordOffset)).xyz);
+	float lumaBL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0, 1.0) * texCoordOffset)).xyz);
+	float lumaBR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, 1.0) * texCoordOffset)).xyz);
+	float lumaM  = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy).xyz);
+
+	vec2 dir;
+	dir.x = -((lumaTL + lumaTR) - (lumaBL + lumaBR));
+	dir.y = ((lumaTL + lumaBL) - (lumaTR + lumaBR));
+	
+	float dirReduce = max((lumaTL + lumaTR + lumaBL + lumaBR) * (R_fxaaReduceMul * 0.25), R_fxaaReduceMin);
+	float inverseDirAdjustment = 1.0/(min(abs(dir.x), abs(dir.y)) + dirReduce);
+	
+	dir = min(vec2(R_fxaaSpanMax, R_fxaaSpanMax), 
+		max(vec2(-R_fxaaSpanMax, -R_fxaaSpanMax), dir * inverseDirAdjustment)) * texCoordOffset;
+
+	vec3 result1 = (1.0/2.0) * (
+		texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(1.0/3.0 - 0.5))).xyz +
+		texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(2.0/3.0 - 0.5))).xyz);
+
+	vec3 result2 = result1 * (1.0/2.0) + (1.0/4.0) * (
+		texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(0.0/3.0 - 0.5))).xyz +
+		texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(3.0/3.0 - 0.5))).xyz);
+
+	float lumaMin = min(lumaM, min(min(lumaTL, lumaTR), min(lumaBL, lumaBR)));
+	float lumaMax = max(lumaM, max(max(lumaTL, lumaTR), max(lumaBL, lumaBR)));
+	float lumaResult2 = dot(luma, result2);
+	
+	if(lumaResult2 < lumaMin || lumaResult2 > lumaMax)
+		gl_FragColor = vec4(result1, 1.0);
+	else
+		gl_FragColor = vec4(result2, 1.0);
 }
 
 
-float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, float varianceMin, float lightBleedReductionAmount)
-{
-	vec2 moments = texture2D(shadowMap, coords.xy).xy;	
-	float p = step(compare, moments.x);
-	float variance = max(moments.y - moments.x * moments.x, varianceMin);
-	
-	float d = compare - moments.x;
-	float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d*d));
-	
-	return min(max(p, pMax), 1.0);
-}
 
 /*chunk-defaultPostProcessShader*/
 <?=chunk('precision')?>

@@ -2746,64 +2746,84 @@ gl_FragColor.y+=0.1*cos(tge_u_frameTime);
 }
 }
 
-/*chunk-pp2*/
-float SampleShadowMap(sampler2D shadowMap, vec2 coords, float compare)
-{
-return step(compare, texture2D(shadowMap, coords.xy).r);
-}
-float SampleShadowMapLinear(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
-{
-vec2 pixelPos = coords/texelSize + vec2(0.5);
-vec2 fracPart = fract(pixelPos);
-vec2 startTexel = (pixelPos - fracPart) * texelSize;
 
-float blTexel = SampleShadowMap(shadowMap, startTexel, compare);
-float brTexel = SampleShadowMap(shadowMap, startTexel + vec2(texelSize.x, 0.0), compare);
-float tlTexel = SampleShadowMap(shadowMap, startTexel + vec2(0.0, texelSize.y), compare);
-float trTexel = SampleShadowMap(shadowMap, startTexel + texelSize, compare);
+/*chunk-post-process-pa*/
 
-float mixA = mix(blTexel, tlTexel, fracPart.y);
-float mixB = mix(brTexel, trTexel, fracPart.y);
+uniform mat3 tge_u_pa_params;
 
-return mix(mixA, mixB, fracPart.x);
-}
-float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 texelSize)
-{
-const float NUM_SAMPLES = 3.0;
-const float SAMPLES_START = (NUM_SAMPLES-1.0)/2.0;
-const float NUM_SAMPLES_SQUARED = NUM_SAMPLES*NUM_SAMPLES;
+void fragment(){
+vec4 c = texture2D(tge_u_texture_input, tge_v_uv);
+if (c.a > 0.0) {
 
-float result = 0.0;
-for(float y = -SAMPLES_START; y <= SAMPLES_START; y += 1.0)
-{
-for(float x = -SAMPLES_START; x <= SAMPLES_START; x += 1.0)
-{
-vec2 coordsOffset = vec2(x,y)*texelSize;
-result += SampleShadowMapLinear(shadowMap, coords + coordsOffset, compare, texelSize);
+float gamma=tge_u_pa_params[0].x;
+float contrast=tge_u_pa_params[0].y;
+float saturation=tge_u_pa_params[0].z;
+float brightness=tge_u_pa_params[1].x;
+float red=tge_u_pa_params[1].y;
+float green=tge_u_pa_params[1].z;
+float blue=tge_u_pa_params[2].x;
+
+c.rgb /= c.a;
+
+vec3 rgb = pow(c.rgb, vec3(1. / gamma));
+rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
+rgb.r *= red;
+rgb.g *= green;
+rgb.b *= blue;
+c.rgb = rgb * brightness;
+
+c.rgb *= c.a;
 }
-}
-return result/NUM_SAMPLES_SQUARED;
+float alpha=tge_u_pa_params[2].y;
+gl_FragColor = c * alpha;
 }
 
-/*chunk-variance-shadow-sampling*/
-
-float linstep(float low, float high, float v)
+/*chunk-post-process-fxaa*/
+uniform vec3 tge_u_inverseFilterTextureSize;
+uniform vec3 tge_u_fxaa_params;
+void fragment()
 {
-return clamp((v - low) / (high - low), 0.0, 1.0);
+
+float R_fxaaSpanMax=tge_u_fxaa_params.x;
+float R_fxaaReduceMin=tge_u_fxaa_params.y;
+float R_fxaaReduceMul=tge_u_fxaa_params.z;
+vec2 texCoordOffset = tge_u_inverseFilterTextureSize.xy;
+vec3 luma = vec3(0.299, 0.587, 0.114);
+float lumaTL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0, -1.0) * texCoordOffset)).xyz);
+float lumaTR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, -1.0) * texCoordOffset)).xyz);
+float lumaBL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0, 1.0) * texCoordOffset)).xyz);
+float lumaBR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, 1.0) * texCoordOffset)).xyz);
+float lumaM= dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy).xyz);
+
+vec2 dir;
+dir.x = -((lumaTL + lumaTR) - (lumaBL + lumaBR));
+dir.y = ((lumaTL + lumaBL) - (lumaTR + lumaBR));
+
+float dirReduce = max((lumaTL + lumaTR + lumaBL + lumaBR) * (R_fxaaReduceMul * 0.25), R_fxaaReduceMin);
+float inverseDirAdjustment = 1.0/(min(abs(dir.x), abs(dir.y)) + dirReduce);
+
+dir = min(vec2(R_fxaaSpanMax, R_fxaaSpanMax), 
+max(vec2(-R_fxaaSpanMax, -R_fxaaSpanMax), dir * inverseDirAdjustment)) * texCoordOffset;
+
+vec3 result1 = (1.0/2.0) * (
+texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(1.0/3.0 - 0.5))).xyz +
+texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(2.0/3.0 - 0.5))).xyz);
+
+vec3 result2 = result1 * (1.0/2.0) + (1.0/4.0) * (
+texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(0.0/3.0 - 0.5))).xyz +
+texture2D(tge_u_texture_input, tge_v_uv.xy + (dir * vec2(3.0/3.0 - 0.5))).xyz);
+
+float lumaMin = min(lumaM, min(min(lumaTL, lumaTR), min(lumaBL, lumaBR)));
+float lumaMax = max(lumaM, max(max(lumaTL, lumaTR), max(lumaBL, lumaBR)));
+float lumaResult2 = dot(luma, result2);
+
+if(lumaResult2 < lumaMin || lumaResult2 > lumaMax)
+gl_FragColor = vec4(result1, 1.0);
+else
+gl_FragColor = vec4(result2, 1.0);
 }
 
 
-float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, float varianceMin, float lightBleedReductionAmount)
-{
-vec2 moments = texture2D(shadowMap, coords.xy).xy;
-float p = step(compare, moments.x);
-float variance = max(moments.y - moments.x * moments.x, varianceMin);
-
-float d = compare - moments.x;
-float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d*d));
-
-return min(max(p, pMax), 1.0);
-}
 
 /*chunk-defaultPostProcessShader*/
 <?=chunk('precision')?>
@@ -5083,7 +5103,114 @@ tge.spot_light = $extend(function (proto, _super) {
 }, tge.point_light);
 
 
+/*./post_process.js*/
+
+
+
+
+tge.post_process = $extend(function (proto) {
+
+
+    function post_process(on_apply, shader) {
+        this.uuid = $guidi();
+        this.shader = shader || tge.post_process.shader;
+        this.enabled = true;
+        this.on_apply = on_apply || null;
+    }
+
+    post_process.shader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('defaultPostProcessShader')?>"));
+
+
+    proto.resize = function (width, height) {
+
+    }
+    proto.bind_output = function (engine,output) {
+        if (output === null) {
+            engine.gl.bindFramebuffer(engine.gl.FRAMEBUFFER, null);
+            engine.gl.viewport(0, 0, engine.gl.canvas.width, engine.gl.canvas.height);
+        }
+        else {
+            output.bind();
+        }
+    }
+
+    var on_apply_params = [null, null, null];
+    proto.apply = function (engine, input, output) {        
+        engine.useShader(this.shader);
+        this.bind_output(engine,output);
+        if (this.on_apply !== null) {
+            on_apply_params[0] = engine;
+            on_apply_params[1] = input;
+            on_apply_params[2] = output;
+            input = this.on_apply.apply(this, on_apply_params);
+
+        }
+        if (this.shader.setUniform("tge_u_texture_input", 0)) {
+            engine.useTexture(input, 0);
+        }
+        
+        engine.renderFullScreenQuad();
+    }
+
+    return post_process;
+
+});
+
+
+tge.post_process.fxaa = $extend(function (proto,_super) {
+    function fxaa(fxaaSpanMax, fxaaReduceMin,fxaaReduceMul) {
+        _super.apply(this);        
+        this.shader = tge.post_process.shader.extend(tge.shader.$str("<?=chunk('post-process-fxaa')?>"));
+        this.tge_u_fxaa_params = tge.vec3(
+            fxaaSpanMax || 8,
+            fxaaReduceMin || (1 / 256),
+            fxaaReduceMul || (1 / 8)
+        );
+
+
+        this.tge_u_inverseFilterTextureSize = tge.vec3();
+        this.on_apply = function (engine, input, output) {
+            this.tge_u_inverseFilterTextureSize[0] = 1 / input.width;
+            this.tge_u_inverseFilterTextureSize[1] = 1 / input.height;
+            this.shader.setUniform("tge_u_inverseFilterTextureSize", this.tge_u_inverseFilterTextureSize);
+            this.shader.setUniform("tge_u_fxaa_params", this.tge_u_fxaa_params);
+            return input;
+        };
+    }
+    return fxaa;
+
+}, tge.post_process);
+
+
+tge.post_process.picture_adjustment = $extend(function (proto, _super) {
+    function picture_adjustment(gamma, contrast, saturation, brightness, red, green, blue, alpha) {
+        _super.apply(this);
+        this.shader = tge.post_process.shader.extend(tge.shader.$str("<?=chunk('post-process-pa')?>"));
+
+        this.params = tge.mat3(
+            gamma || 1,
+            contrast || 1,
+            saturation || 1,
+            brightness || 1,
+            red || 1,
+            green || 1,
+            blue || 1,
+            alpha || 1
+        );
+
+        this.on_apply = function (engine, input, output) {
+            this.shader.setUniform("tge_u_pa_params", this.params);
+            return input;
+        };
+    }
+    return picture_adjustment;
+
+}, tge.post_process);
+
+
+
 /*src/engine.js*/
+
 
 
 
@@ -5244,23 +5371,13 @@ tge.engine = $extend(function (proto) {
 
         this.defaultRenderTarget = this._defaultRenderTarget;
         this.postProcessTarget = new tge.rendertarget(gl, 10, 10, true);
-        this.postProcessTarget.clearBuffer = false;
+
+
         this.postProcessTarget.display = this.postProcessTarget.getColorDisplay();
 
-        this.postProcessPipeline = [];
-
-        var pp1 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp1')?>"));
-        this.postProcessPipeline.push(function (engine) {           
-            return pp1
-        });
-
-        var pp2 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp2')?>"));
-        this.postProcessPipeline.push(function (engine) {
-            return pp2
-        });
+        this.post_processes = [];
 
 
-        this.shadowPostProcess = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('shadow-post-process')?>"));
 
         this.tge_u_pipelineParams = tge.vec4();
         
@@ -5269,15 +5386,18 @@ tge.engine = $extend(function (proto) {
         gl.enable(gl.CULL_FACE);
         gl.clearColor(0, 0, 0, 1);
 
-       
+
+        this.final_post_process = new tge.post_process();
+
+
+
+
+      
 
     }
 
-    engine.defaultPostProcessShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('defaultPostProcessShader')?>"));
 
-    engine.defaultPostProcessShader.process = function (engine) {
-        return tge.engine.defaultPostProcessShader;
-    };
+
 
     proto.setSize = function (width, height) {
         this.gl.canvas.width = width * this.gl.pixelRatio;
@@ -5286,6 +5406,9 @@ tge.engine = $extend(function (proto) {
         
         this.defaultRenderTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
         this.postProcessTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
+        for (var i = 0; i < this.post_processes.length; i++) {
+            this.post_processes[i].resize(this.gl.canvas.width, this.gl.canvas.height)
+        }
 
     };
 
@@ -5366,6 +5489,9 @@ tge.engine = $extend(function (proto) {
 
         return function (geo) {
             if (!geo.compiled) tge.geometry.compile(this.gl, geo);
+
+            if (this.used_geo_id === geo.uuid) return;
+            this.used_geo_id = geo.uuid;
             shader = this.activeShader;
             for (id in shader.attributes) {
                 if (geo.attributes[id]) {
@@ -5558,7 +5684,7 @@ tge.engine = $extend(function (proto) {
             return b.cameraDistance - a.cameraDistance;
         }
 
-        var postProcessOutput;
+        var postProcessOutput, post_process, post_process_input, post_process_output;
         return function (camera, meshes, lights) {
 
             this.setDefaultViewport().clearScreen();
@@ -5701,15 +5827,26 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-         
-            
+            post_process_input = _this._defaultRenderTarget.colorTexture;
+            i1 = 0;
+            for (i4 = 0; i4 < _this.post_processes.length; i4++) {
+                post_process = _this.post_processes[i4];
+                if (post_process.enabled) {
+                    if (i1 % 2 === 0) {
+                        post_process.apply(_this, post_process_input, _this.postProcessTarget);
+                        post_process_input = _this.postProcessTarget.colorTexture;
+                    }
 
-            postProcessOutput = this.defaultRenderTarget.colorTexture;
+                    else {                        
+                        post_process.apply(_this, post_process_input, _this._defaultRenderTarget);
+                        post_process_input = _this._defaultRenderTarget.colorTexture;
+                    }
+                    i1++;
+                }
+            }
 
-
-            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
-
-           
+            _this.final_post_process.apply(_this, post_process_input, null);
+                        
 
             _this.textureSlots[0] = -1;
             _this.updateTextures();
@@ -5722,6 +5859,14 @@ tge.engine = $extend(function (proto) {
 
     })();
     var fq = tge.geometry.quad2D();
+
+    proto.renderFullScreenQuad = function () {
+
+        this.useGeometry(fq);        
+        this.gl.drawArrays(4, 0, 6);
+
+    };
+
     proto.renderPostProcessQuad = (function () {
         var shader;
         return function (shader, target, texture_input) {

@@ -2,6 +2,7 @@ import * from './shader.js'
 import * from './model.js'
 import * from './camera.js'
 import * from './light.js'
+import * from './post_process.js'
 
 tge.engine = $extend(function (proto) {
 
@@ -157,23 +158,13 @@ tge.engine = $extend(function (proto) {
 
         this.defaultRenderTarget = this._defaultRenderTarget;
         this.postProcessTarget = new tge.rendertarget(gl, 10, 10, true);
-        this.postProcessTarget.clearBuffer = false;
+
+
         this.postProcessTarget.display = this.postProcessTarget.getColorDisplay();
 
-        this.postProcessPipeline = [];
-
-        var pp1 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp1')?>"));
-        this.postProcessPipeline.push(function (engine) {           
-            return pp1
-        });
-
-        var pp2 = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('pp2')?>"));
-        this.postProcessPipeline.push(function (engine) {
-            return pp2
-        });
+        this.post_processes = [];
 
 
-        this.shadowPostProcess = tge.engine.defaultPostProcessShader.extend(tge.shader.$str("<?=chunk('shadow-post-process')?>"));
 
         this.tge_u_pipelineParams = tge.vec4();
         
@@ -182,15 +173,18 @@ tge.engine = $extend(function (proto) {
         gl.enable(gl.CULL_FACE);
         gl.clearColor(0, 0, 0, 1);
 
-       
+
+        this.final_post_process = new tge.post_process();
+
+
+
+
+      
 
     }
 
-    engine.defaultPostProcessShader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('defaultPostProcessShader')?>"));
 
-    engine.defaultPostProcessShader.process = function (engine) {
-        return tge.engine.defaultPostProcessShader;
-    };
+
 
     proto.setSize = function (width, height) {
         this.gl.canvas.width = width * this.gl.pixelRatio;
@@ -199,6 +193,9 @@ tge.engine = $extend(function (proto) {
         
         this.defaultRenderTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
         this.postProcessTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
+        for (var i = 0; i < this.post_processes.length; i++) {
+            this.post_processes[i].resize(this.gl.canvas.width, this.gl.canvas.height)
+        }
 
     };
 
@@ -279,6 +276,9 @@ tge.engine = $extend(function (proto) {
 
         return function (geo) {
             if (!geo.compiled) tge.geometry.compile(this.gl, geo);
+
+            if (this.used_geo_id === geo.uuid) return;
+            this.used_geo_id = geo.uuid;
             shader = this.activeShader;
             for (id in shader.attributes) {
                 if (geo.attributes[id]) {
@@ -471,7 +471,7 @@ tge.engine = $extend(function (proto) {
             return b.cameraDistance - a.cameraDistance;
         }
 
-        var postProcessOutput;
+        var postProcessOutput, post_process, post_process_input, post_process_output;
         return function (camera, meshes, lights) {
 
             this.setDefaultViewport().clearScreen();
@@ -614,15 +614,26 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
-         
-            
+            post_process_input = _this._defaultRenderTarget.colorTexture;
+            i1 = 0;
+            for (i4 = 0; i4 < _this.post_processes.length; i4++) {
+                post_process = _this.post_processes[i4];
+                if (post_process.enabled) {
+                    if (i1 % 2 === 0) {
+                        post_process.apply(_this, post_process_input, _this.postProcessTarget);
+                        post_process_input = _this.postProcessTarget.colorTexture;
+                    }
 
-            postProcessOutput = this.defaultRenderTarget.colorTexture;
+                    else {                        
+                        post_process.apply(_this, post_process_input, _this._defaultRenderTarget);
+                        post_process_input = _this._defaultRenderTarget.colorTexture;
+                    }
+                    i1++;
+                }
+            }
 
-
-            this.renderPostProcessQuad(tge.engine.defaultPostProcessShader, null, postProcessOutput);
-
-           
+            _this.final_post_process.apply(_this, post_process_input, null);
+                        
 
             _this.textureSlots[0] = -1;
             _this.updateTextures();
@@ -635,6 +646,14 @@ tge.engine = $extend(function (proto) {
 
     })();
     var fq = tge.geometry.quad2D();
+
+    proto.renderFullScreenQuad = function () {
+
+        this.useGeometry(fq);        
+        this.gl.drawArrays(4, 0, 6);
+
+    };
+
     proto.renderPostProcessQuad = (function () {
         var shader;
         return function (shader, target, texture_input) {
