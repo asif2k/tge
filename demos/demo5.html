@@ -10,7 +10,7 @@
  
   <script>
 
-    tge.demo({ fws_lightsCount:8, pixelRatio:1}, function (app, engine, scene, camera) {
+    tge.demo({ fws_lightsCount:8, pixelRatio1:1}, function (app, engine, scene, camera) {
       var light0 = scene.addLight(new tge.light(), function (lg) {
         lg.setPosition(0, 5, 0);
         lg.setDiffuse(0.3685, 0.3685, 0.3685);
@@ -61,7 +61,7 @@
       });
       
 
-      scene.createRandomModelsGrid(50, 12, function (md,i) {
+      scene.createRandomModelsGrid(50, 8, function (md,i) {
         md.position[1] = Math.random() * 3;
         md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW+tge.SHADING.RECEIVE_SHADOW);
        // md.meshes[0].material.setAmbient(0, 0, 0);
@@ -71,6 +71,21 @@
           md.meshes[0].material.setTansparency(0.7);
           //md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r5.jpg');
         }
+        if (Math.floor(Math.random() * 3) == 1) {
+          md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+        }
+        md.px = md.position[0];
+        md.pz = md.position[2];
+        md.update = (function (_update) {
+          return function () {
+
+
+
+
+            _update.apply(this);
+          }
+        })(md.update);
+
         return;
         if (Math.floor(Math.random() * 3) == 1) {
           md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
@@ -117,10 +132,15 @@
 
       camera.setPosition(-4.322909832000732, 23.915023803710938, 39.11167526245117);
       camera.setRotation(-0.9999994039535522, 0.01399976760149002, 0);
-
+      /*
+       *  
+       *  new tge.post_process.picture_adjustment(0.1, 2.4, 1, 1, 1, 1, 1, 1),
+        new tge.post_process.fxaa(),
+        new tge.post_process.motion_blur()
+       */ 
       engine.post_processes = [
-        new tge.post_process.picture_adjustment(0.1, 2.4, 1, 1, 1, 1, 1, 1),
-        new tge.post_process.fxaa()
+        new tge.post_process.fxaa(),
+        
       ]
       app.playLoop(function (delta, time) {
         if (light0.version <3) light0.version++;

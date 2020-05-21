@@ -116,7 +116,7 @@ tge.demo = function (parameters, cb) {
     scene.createRandomModelsGrid = function (range, step, onModel, material) {
         var geos = [];
         geos.push(tge.geometry.cube({ size: 2 }));
-        geos.push(tge.geometry.sphere());
+        geos.push(tge.geometry.sphere({ divs:16}));
         material = material || tge.phong_material;
         var cc = 0;
         for (var x = -range; x <= range; x += step) {
@@ -135,7 +135,7 @@ tge.demo = function (parameters, cb) {
 
 
 
-    var camera = new tge.perspective_camera(80, window.innerWidth / window.innerHeight, 0.1, 500);
+    var camera = new tge.perspective_camera(70, window.innerWidth / window.innerHeight, 0.1, 500);
     console.log(camera);
     app.mouseDrage = function (dx, dy, e) {
         camera.moveLeftRight(-dx * 0.1);

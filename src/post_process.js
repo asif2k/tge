@@ -1,5 +1,3 @@
-import * from './geometry.js'
-import * from './material.js'
 
 tge.post_process = $extend(function (proto) {
 
@@ -53,7 +51,7 @@ tge.post_process = $extend(function (proto) {
 tge.post_process.fxaa = $extend(function (proto,_super) {
     function fxaa(fxaaSpanMax, fxaaReduceMin,fxaaReduceMul) {
         _super.apply(this);        
-        this.shader = tge.post_process.shader.extend(tge.shader.$str("<?=chunk('post-process-fxaa')?>"));
+        this.shader = tge.post_process.shader.extend(import('post_process_fxaa.glsl'));
         this.tge_u_fxaa_params = tge.vec3(
             fxaaSpanMax || 8,
             fxaaReduceMin || (1 / 256),
@@ -78,7 +76,7 @@ tge.post_process.fxaa = $extend(function (proto,_super) {
 tge.post_process.picture_adjustment = $extend(function (proto, _super) {
     function picture_adjustment(gamma, contrast, saturation, brightness, red, green, blue, alpha) {
         _super.apply(this);
-        this.shader = tge.post_process.shader.extend(tge.shader.$str("<?=chunk('post-process-pa')?>"));
+        this.shader = tge.post_process.shader.extend(import('post_process_pa.glsl'));
 
         this.params = tge.mat3(
             gamma || 1,
@@ -97,6 +95,78 @@ tge.post_process.picture_adjustment = $extend(function (proto, _super) {
         };
     }
     return picture_adjustment;
+
+}, tge.post_process);
+
+
+
+tge.post_process.radial_blur = $extend(function (proto, _super) {
+
+   
+
+    function radial_blur(centerX,centerY,angle,radius,kernelSize) {
+        _super.apply(this);
+        this.shader = tge.post_process.shader.extend(import('post_process_radial_blur.glsl'));
+
+
+        this.centerX =centerX || 0.5;
+        this.centerY = centerY || 0.5;
+        this.angle = angle || 3;
+        this.radius = radius || -1;
+        this.kernelSize = kernelSize || 10;
+
+        this.params = tge.mat3();                     
+
+        this.on_apply = function (engine, input, output) {
+            this.params[0] = input.width;
+            this.params[1] = input.height;
+            this.params[4] = this.centerX * input.width;
+            this.params[5] = this.centerY * input.height;
+            this.params[6] = this.angle * tge.DEGTORAD;
+            this.params[7] = this.radius;
+            this.params[8] = this.kernelSize;
+
+            this.shader.setUniform("tge_u_blur_params", this.params);
+            return input;
+        };
+    }
+    return radial_blur;
+
+}, tge.post_process);
+
+
+
+tge.post_process.motion_blur = $extend(function (proto, _super) {
+
+
+
+    function motion_blur(velX, velY, offset, kernelSize) {
+        _super.apply(this);
+        this.shader = tge.post_process.shader.extend(import('post_process_motion_blur.glsl'));
+
+
+        this.velX = velX || 14;
+        this.velY = velY || 14;
+        
+        this.offset = offset || 0;
+        this.kernelSize = kernelSize || 50;
+
+        this.params = tge.mat3();
+
+        this.on_apply = function (engine, input, output) {
+            this.params[0] = input.width;
+            this.params[1] = input.height;
+            this.params[4] = this.velX;
+            this.params[5] = this.velY;
+         
+            this.params[7] = this.offset;
+            this.params[8] = this.kernelSize;
+
+            this.shader.setUniform("tge_u_blur_params", this.params);
+            return input;
+        };
+    }
+    return motion_blur;
 
 }, tge.post_process);
 
