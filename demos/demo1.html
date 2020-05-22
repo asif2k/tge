@@ -10,11 +10,11 @@
 
   <script>
 
-    tge.demo({ fws_lightsCount: 8, pixelRatio1: 1 }, function (app, engine, scene, camera) {
-      var light0 = scene.addLight(new tge.point_light(), function (lg) {
+    tge.demo({ fws_lightsCount: 4, pixelRatio1: 1 }, function (app, engine, scene, camera) {
+      var light0 = scene.addLight(new tge.light(), function (lg) {
         lg.setPosition(0, 5, 0);
-        lg.setDiffuse(0.6, 0.6, 0.6);
-        lg.setAmbient(0.364338, 0.364338, 0.364338).setSpecular(0.385, 0.385, 0.385).setIntensity(7);
+        lg.setDiffuse(0.5, 0.5, 0.5);
+        lg.setAmbient(0.364338, 0.364338, 0.364338).setSpecular(0.385, 0.385, 0.385).setIntensity(3);
         //lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
         lg.setRotation(-0.613335132598877, 1, 0);
         lg.shadowMapSize = 2048;
@@ -23,10 +23,11 @@
 
         // lg.enabled = false;
         scene.addModel(lg.getDisplay());
-        scene.addModel(new tge.model(tge.geometry.sphere({ size: 1,divs:16}), new tge.glow_material()), function (md, mesh) {
+        scene.addModel(new tge.model(tge.geometry.sphere({ size: 1,divs:16}), new tge.material()), function (md, mesh) {
           md.parent = lg;
           md.setScaling(0.25, 0.25, 0.25);
           mesh.material.setAmbient(1, 1, 1);
+          mesh.material.ambient[3] = 1;
         });
       });
 
@@ -36,13 +37,15 @@
         scene.addModel(new tge.model(geo, new tge.material()), function (md, mesh) {
           md.setPosition(7, 0.5, 0);
           mesh.material.setAmbient(0, 0, 1).setDiffuse(0, 0, 1);
+          mesh.material.ambient[3] = 1;
           //mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
         });
       });
 
-      scene.addModel(new tge.model(tge.geometry.sphere({ size: 2, divs: 16 }), new tge.glow_material()), function (md, mesh) {
+      scene.addModel(new tge.model(tge.geometry.sphere({ size: 2, divs: 16 }), new tge.material()), function (md, mesh) {
         md.setPosition(10, 0.5, 0);
-        mesh.material.setAmbient(1,0,0);
+        mesh.material.setAmbient(1, 0, 0);
+        mesh.material.ambient[3] = 1;
       });
 
       scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
@@ -72,7 +75,7 @@
           //md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r5.jpg');
         }
         else {
-          md.meshes[0].material.setShinness(110);
+          md.meshes[0].material.ambient[3] = Math.random();
         }
         if (Math.floor(Math.random() * 3) == 1) {
           md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
@@ -114,7 +117,13 @@
       //  new tge.post_process.radial_blur(), 
       //new tge.post_process.kawase_blur()
       engine.post_processes = [
-        new tge.post_process.glow(),
+        new tge.post_process.glow({
+          blurQuality: 15,
+          resolution: 0.5,
+          blendFactor: 2,
+          blendGamma:1,
+          brightThreshold: [0.2627, 0.6780, 0.0593, -0.5]
+        }),
         new tge.post_process.fxaa(),
        
         

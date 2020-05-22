@@ -258,52 +258,73 @@ tge.post_process.glow = $extend(function (proto, _super) {
 
 
 
-    function glow() {
+    function glow(params) {
         _super.apply(this);
+        params = params || {};
+
+        this.resolution = params.resolution || 0.5;
+        this.resolution_last = this.resolution;
+        this.blurQuality = params.blurQuality || 10;                
+        this.brightThreshold = tge.vec4(params.brightThreshold || [0.2627, 0.6780, 0.0593, -0.5]);
+        this.blendExposure = params.blendExposure || 1;
+        this.blendGamma = params.blendGamma || 1;
+        this.blendFactor = params.blendFactor || 3.0;
+        this.tge_u_offset = tge.vec2();
+        this.blurKernel = tge.vec3([5.0 / 16.0, 6 / 16.0, 5 / 16.0]);
         
-
-        this.blur = new tge.post_process.kawase_blur();
-
     }
 
     var chunks = tge.shader.createChunksLib(import('post_process_glow.glsl'))
-    console.log("chunks", chunks);
 
 
     glow.emission_shader = tge.post_process.shader.extend(chunks["emission-filter"]);
     glow.merge_shader = tge.post_process.shader.extend(chunks["merge"]);
     glow.blur_shader = tge.post_process.shader.extend(chunks["blur"]);
 
-    proto.resize = function (width, height) {
-        this.emission_map.resize(width, height);
-    }
+
+    proto.resize = function () {
+        this.resolution_last = -1;
+    };
 
 
 
+    var i = 0, t = 0;
+    var tge_u_glow_params = tge.vec3();
     proto.apply = function (engine, input, output) {
 
         if (!this.targets) {
-            var sz = 0.5;
+            
             this.targets = [new tge.rendertarget(engine.gl,
-                input.width * sz, input.height * sz),
+                input.width * this.resolution, input.height * this.resolution),
             new tge.rendertarget(engine.gl,
-                input.width * sz, input.height * sz)];
-
-            this.tge_u_offset = tge.vec2();
-            this.tge_u_blur = tge.vec3(5.0 / 16.0, 6 / 16.0, 5 / 16.0);
-            tge.vec3.set(this.tge_u_blur, 5 / 16, 6 / 16, 5 / 16);
+                input.width * this.resolution, input.height * this.resolution)];
         }
-        engine.gl.disable(engine.gl.DEPTH_TEST);
+
+        else {
+
+            if (this.resolution_last !== this.resolution) {
+                this.targets[0].resize(input.width * this.resolution, input.height * this.resolution);
+                this.targets[1].resize(input.width * this.resolution, input.height * this.resolution);
+                
+            }
+
+
+        }
+        this.resolution_last = this.resolution;
+        
+
         engine.useShader(tge.post_process.glow.emission_shader);
+        engine.activeShader.setUniform("tge_u_brightThreshold", this.brightThreshold);
         this.targets[0].bind();        
         engine.useTexture(input, 0);
         engine.renderFullScreenQuad();
 
 
         engine.useShader(tge.post_process.glow.blur_shader);
-        engine.activeShader.setUniform("tge_u_blur", this.tge_u_blur);
-        var t=0;
-        for (var i = 1; i < 8; i++) {
+        engine.activeShader.setUniform("tge_u_blurKernel", this.blurKernel);
+      
+        t=0;
+        for (i = 1; i < this.blurQuality; i++) {
             t = i % 2;
             this.targets[t].bind();
             engine.useTexture(this.targets[(t === 0 ? 1 : 0)].colorTexture, 0);
@@ -320,14 +341,15 @@ tge.post_process.glow = $extend(function (proto, _super) {
                 
         this.bind_output(engine, output);
         engine.useTexture(input, 0);
-        engine.useShader(tge.post_process.glow.merge_shader);        
+        engine.useShader(tge.post_process.glow.merge_shader);
+        tge_u_glow_params[0] = this.blendExposure;
+        tge_u_glow_params[1] = this.blendGamma;
+        tge_u_glow_params[2] = this.blendFactor;
+        engine.activeShader.setUniform("tge_u_glow_params", tge_u_glow_params);
         engine.activeShader.setUniform("tge_u_glow_emission", 1)
         engine.useTexture(this.targets[t].colorTexture, 1);
-
         engine.renderFullScreenQuad();
 
-
-        engine.gl.enable(engine.gl.DEPTH_TEST);
     }
 
     proto.apply2 = function (engine, input, output) {

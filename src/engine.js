@@ -379,7 +379,7 @@ tge.engine = $extend(function (proto) {
 
         var dummyLight = new tge.light();
         dummyLight.setAmbient(0, 0, 0).setSpecular(0, 0, 0).setDiffuse(0, 0, 0).setIntensity(0);
-        dummyLight.attenuation[3] = 1;
+        dummyLight.attenuation[3] = 0.5;
 
         var i2 = 0;
         return function (camera) {
@@ -556,6 +556,31 @@ tge.engine = $extend(function (proto) {
             }     
               
 
+
+
+            //post_process_input = _this._defaultRenderTarget.colorTexture;
+            //i1 = 0;
+            //for (i4 = 0; i4 < _this.post_processes.length; i4++) {
+            //    post_process = _this.post_processes[i4];
+            //    if (post_process.enabled && post_process.drawLastFrame) {
+            //        if (i1 % 2 === 0) {
+            //            post_process.drawLastFrame(_this, post_process_input, _this.postProcessTarget);
+            //            post_process_input = _this.postProcessTarget.colorTexture;
+            //            post_process_output = _this._defaultRenderTarget;
+            //        }
+
+            //        else {
+            //            post_process.drawLastFrame(_this, post_process_input, _this._defaultRenderTarget);
+            //            post_process_input = _this._defaultRenderTarget.colorTexture;
+            //            post_process_output = _this.postProcessTarget;
+            //        }
+            //        i1++;
+            //    }
+            //}
+
+
+          //  tge.post_process.flat(_this, post_process_input, post_process_output);
+
            
             for (i4 = 0; i4 < lights.length; i4++) {
                 light = lights[i4];                
@@ -564,7 +589,12 @@ tge.engine = $extend(function (proto) {
 
             }
             _this.disableFWRendering();
+
             
+
+
+
+
 
 
             _this.gl.enable(_this.gl.CULL_FACE);
@@ -621,6 +651,7 @@ tge.engine = $extend(function (proto) {
 
             post_process_input = _this._defaultRenderTarget.colorTexture;
             i1 = 0;
+            _this.gl.disable(_this.gl.DEPTH_TEST);
             for (i4 = 0; i4 < _this.post_processes.length; i4++) {
                 post_process = _this.post_processes[i4];
                 if (post_process.enabled) {
@@ -636,7 +667,7 @@ tge.engine = $extend(function (proto) {
                     i1++;
                 }
             }
-
+            _this.gl.enable(_this.gl.DEPTH_TEST);
                         
             tge.post_process.flat(_this, post_process_input, null);
             _this.textureSlots[0] = -1;

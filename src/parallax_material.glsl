@@ -44,6 +44,7 @@ vec3 normal = normalize(tge_v_tbnMatrix * (2.0 * texture2D(tge_u_normalMap, uv).
 	<?}?>
 	gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * amb;
 	gl_FragColor.w *= tge_u_objectMaterial[0].w;
+	
 
 
 }

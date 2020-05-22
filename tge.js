@@ -3541,7 +3541,7 @@ tge.material = $extend(function (proto,_super) {
     $assign(proto, tge.flags.prototype);
 
     proto.setTansparency = function (v) {
-        if (v > 1) v = 1;
+        if (v >= 1) v = 0.5;
         this.ambient[3] = v;
         if (v < 1) this.setFlag(tge.SHADING.TRANSPARENT);
         else this.unsetFlag(tge.SHADING.TRANSPARENT);
@@ -3551,6 +3551,7 @@ tge.material = $extend(function (proto,_super) {
         this.specular[3] = shin;
         return (this);
     };
+    
 
     proto.setDepthTest = function (on) {
         if (on)
@@ -3643,8 +3644,8 @@ tge.material = $extend(function (proto,_super) {
         tge.flags.apply(this, arguments);
 
         this.uuid = $guidi();
-        this.ambient[3] = 1;
 
+        
         this.textureMatrix = tge.mat3();
 
         this.shader = tge.material.shader;
@@ -3656,6 +3657,7 @@ tge.material = $extend(function (proto,_super) {
         this.setFlag(tge.SHADING.FLAT);
         this.drawType = tge.DRAW_TYPES.TRIANGLES;
         this.setShinness(options.shinness || 100);
+        this.ambient[3] = 0.1;
         this.noDepthTest = false;
         return (this);
 
@@ -3692,6 +3694,7 @@ varying vec4 tge_v_shadow_vertex;
 void fragment(void) {
 initPipelineParams();
 gl_FragColor = texture2D(tge_u_ambientTexture, tge_v_uv) * tge_v_color * tge_u_objectMaterial[0];
+gl_FragColor.w*=tge_u_objectMaterial[0].w;
 }`);
 
     material.init = function () {
@@ -3740,59 +3743,6 @@ gl_FragColor = texture2D(tge_u_ambientTexture, tge_v_uv) * tge_v_color * tge_u_o
 }, tge.material_base); tge.material.init();
 
 
-tge.glow_material = $extend(function (proto, _super) {
-
-    function glow_material(options) {
-        options = options || {};
-        _super.apply(this, arguments);
-        this.shader = tge.glow_material.shader;
-        this.setAmbient(1, 1, 1);
-        this.setBrightness(212);
-        return (this);
-    }
-
-    proto.setBrightness = function (b) {
-        this.ambient[3] = b;
-    };
-
-
-    glow_material.shader = tge.pipleline_shader.parse(`<?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
-<?=chunk('mesh-attributes-flat')?>
-
-uniform mat4 tge_u_viewProjectionMatrix;
-uniform mat4 tge_u_modelMatrix;
-uniform mat3 tge_u_textureMatrix;
-varying vec4 tge_v_shadow_vertex;
-varying vec4 tge_v_color;
-varying vec2 tge_v_uv;
-
-void vertex(){
-initPipelineParams();
-tge_v_shadow_vertex = tge_u_modelMatrix * vec4(tge_a_position,1.0);
-gl_Position = tge_u_viewProjectionMatrix* tge_v_shadow_vertex;
-tge_v_color= tge_a_color;
-
-tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
-
-}
-
-
-<?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
-uniform mat4 tge_u_objectMaterial;
-uniform sampler2D tge_u_ambientTexture;
-varying vec4 tge_v_color;
-varying vec2 tge_v_uv;
-varying vec4 tge_v_shadow_vertex;
-void fragment(void) {
-initPipelineParams();
-gl_FragColor = texture2D(tge_u_ambientTexture, tge_v_uv) * tge_v_color * tge_u_objectMaterial[0];
-}`);
-
-    return glow_material;
-
-}, tge.material);
 
 tge.phong_material = $extend(function (proto, _super) {
    
@@ -3856,13 +3806,10 @@ tge_u_lightMatrix<?=i?>[3].xyz - tge_v_shadow_vertex.xyz,
 tge_u_lightMatrix<?=i?>[2].xyz);
 <?}?>
 gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * texture2D(tge_u_ambientTexture, tge_v_uv);
-gl_FragColor.w *= tge_u_objectMaterial[0].w;
-/*
-vec2 iResolution=vec2(2435.0,1907.0);
-vec2 uv = vec2(gl_FragCoord.xy/ iResolution.xy);
-uv.y =uv.y;
-gl_FragColor-=(texture2D(tge_u_lightMap,uv));
-*/
+gl_FragColor.w*=tge_u_objectMaterial[0].w;
+
+
+
 
 }
 
@@ -3945,6 +3892,7 @@ tge_u_lightMatrix<?=i?>[2].xyz);
 <?}?>
 gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * amb;
 gl_FragColor.w *= tge_u_objectMaterial[0].w;
+
 
 
 }
@@ -4339,6 +4287,7 @@ tge.light = $extend(function (proto, _super) {
         this.shadowCameraDistance = 20;
         this.shadowFlipFaces = true;
         this.castShadows = false;
+        this.coloredShadows = false;
 
         this.flags = tge.OBJECT_TYPES.STATIC_LIGHT;
         this.shadowMapSize = 1024;
@@ -4362,8 +4311,77 @@ tge.light = $extend(function (proto, _super) {
     }
 
     proto.getShadowReceiverShader = function (shader) {
-        if (!shader.default_shadow_receiver) {
-            shader.default_shadow_receiver = tge.pipleline_shader.parse(`uniform mat4 tge_u_light_camera_matrix;
+        if (this.coloredShadows) {
+            if (!shader.colored_shadow_receiver) {
+                shader.colored_shadow_receiver = tge.pipleline_shader.parse(tge.light.colored_shadows['receiver'], shader, true);
+                shader.colored_shadow_receiver.shadowShader = true;
+            }
+            return shader.colored_shadow_receiver;
+        }
+        else {
+            if (!shader.default_shadow_receiver) {
+                shader.default_shadow_receiver = tge.pipleline_shader.parse(tge.light.default_shadows['receiver'], shader, true);
+                shader.default_shadow_receiver.shadowShader = true;
+            }
+            return shader.default_shadow_receiver;
+        }
+    };
+
+    proto.getShadowMapShader = function (shader) {
+        if (this.coloredShadows) {
+            if (!shader.colored_shadow_map) {
+                shader.colored_shadow_map = tge.pipleline_shader.parse(tge.light.colored_shadows['map'], shader, true);
+                shader.colored_shadow_map.shadowShader = true;
+            }
+            return shader.colored_shadow_map;
+        }
+        else {
+            if (!shader.default_shadow_map) {
+                shader.default_shadow_map = tge.pipleline_shader.parse(tge.light.default_shadows['map'], shader, true);
+                shader.default_shadow_map.shadowShader = true;
+            }
+            return shader.default_shadow_map;
+        }
+    };
+
+    proto.updateLightCamera = function (light_camera, camera) {
+        light_camera.worldPosition[0] = (camera.fwVector[0] * (-this.shadowCameraDistance)) + camera.worldPosition[0];
+        light_camera.worldPosition[1] = (camera.fwVector[1] * (-this.shadowCameraDistance)) + camera.worldPosition[1];
+        light_camera.worldPosition[2] = (camera.fwVector[2] * (-this.shadowCameraDistance)) + camera.worldPosition[2];
+    };
+    proto.getLightCamera = function () {
+        if (!this.camera) {
+            var d = this.shadowCameraDistance * 2;
+            this.camera = new tge.ortho_camera(-d, d, -d, d, -d * 0.5, d * 10);
+        }
+        return this.camera;
+    };
+
+    proto.getShadowLightPos = function (light_pos) {
+        tge.vec3.set(light_pos, this.fwVector[0] * 200, this.fwVector[1] * 200, this.fwVector[2] * 200);
+
+    };
+
+
+    light.colored_shadows = tge.shader.createChunksLib(`/*chunk-map*/
+<?=chunk('precision')?>
+
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
+uniform mat4 tge_u_objectMaterial;
+uniform vec4 tge_u_shadowColor;
+
+void fragment(void) {
+vec4 c=texture2D(tge_u_ambientTexture, tge_v_uv);
+if(c.w<0.02) discard;
+gl_FragColor=mix(vec4(1.0),1.0-tge_u_shadowColor,1.0-tge_u_shadowColor.a);
+gl_FragColor=mix(gl_FragColor,1.0-c,1.0-c.a);
+
+gl_FragColor.a=c.a*tge_u_shadowColor.a;
+}
+
+/*chunk-receiver*/
+uniform mat4 tge_u_light_camera_matrix;
 varying vec4 tge_v_shadow_light_vertex;
 
 void vertex(){
@@ -4417,30 +4435,68 @@ void fragment(void) {
 gl_FragColor = (getShadowSample()*tge_u_shadow_params.x)*shadowColor;
 
 
-}`, shader, true);
-            shader.default_shadow_receiver.shadowShader = true;
-        }
-        return shader.default_shadow_receiver;
-    }
+}`);
+    light.default_shadows = tge.shader.createChunksLib(`/*chunk-map*/
+<?=chunk('precision')?>
 
-    proto.updateLightCamera = function (light_camera, camera) {
-        light_camera.worldPosition[0] = (camera.fwVector[0] * (-this.shadowCameraDistance)) + camera.worldPosition[0];
-        light_camera.worldPosition[1] = (camera.fwVector[1] * (-this.shadowCameraDistance)) + camera.worldPosition[1];
-        light_camera.worldPosition[2] = (camera.fwVector[2] * (-this.shadowCameraDistance)) + camera.worldPosition[2];
-    };
-    proto.getLightCamera = function () {
-        if (!this.camera) {
-            var d = this.shadowCameraDistance * 2;
-            this.camera = new tge.ortho_camera(-d, d, -d, d, -d * 0.5, d * 10);
-        }
-        return this.camera;
-    };
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
 
-    proto.getShadowLightPos = function (light_pos) {
-        tge.vec3.set(light_pos, this.fwVector[0] * 200, this.fwVector[1] * 200, this.fwVector[2] * 200);
+void fragment(void) {
+if(texture2D(tge_u_ambientTexture, tge_v_uv).a<0.02) discard;
+gl_FragColor=vec4(1.0);
+}
 
-    };
+/*chunk-receiver*/
+uniform mat4 tge_u_light_camera_matrix;
+varying vec4 tge_v_shadow_light_vertex;
 
+void vertex(){
+super_vertex();
+tge_v_shadow_light_vertex = tge_u_light_camera_matrix * tge_v_shadow_vertex;
+}
+
+
+<?=chunk('precision')?>
+<?=chunk('shadow-sampling')?>
+
+
+varying vec3 tge_v_normal;
+varying vec4 tge_v_shadow_light_vertex;
+
+varying vec4 tge_v_shadow_vertex;
+
+uniform sampler2D tge_u_shadow_map;
+uniform vec3 tge_u_shadow_params;
+uniform vec3 tge_u_light_pos;
+uniform sampler2D tge_u_ambientTexture;
+varying vec2 tge_v_uv;
+
+
+
+float getShadowSample() {
+
+float f=texture2D(tge_u_ambientTexture, tge_v_uv).a;
+
+vec3 shadowMapCoords =tge_v_shadow_light_vertex.xyz/tge_v_shadow_light_vertex.w;
+f*=step(-(dot(tge_v_normal,normalize(tge_u_light_pos - shadowMapCoords.xyz))),0.0);
+
+shadowMapCoords.xyz = shadowMapCoords.xyz * 0.5 + 0.5;
+
+f*=step(shadowMapCoords.x,1.0)*step(shadowMapCoords.y,1.0)*step(shadowMapCoords.z,1.0);
+f*=step(0.0,shadowMapCoords.x)*step(0.0,shadowMapCoords.y)*step(0.0,shadowMapCoords.y);
+
+return (0.5*f)-SampleShadowMapPCF(tge_u_shadow_map, shadowMapCoords.xy,shadowMapCoords.z-tge_u_shadow_params.z ,vec2(tge_u_shadow_params.y))*f;
+
+
+}
+
+
+void fragment(void) {
+gl_FragColor = vec4((getShadowSample()*tge_u_shadow_params.x));
+
+
+}`);
 
 
 
@@ -4449,47 +4505,32 @@ gl_FragColor = (getShadowSample()*tge_u_shadow_params.x)*shadowColor;
         var castCount, updateLightCameraMatrices, light_camera;
         var tge_u_shadow_params = tge.vec3(), tge_u_light_pos = tge.vec3();
         var tge_u_shadowColor = tge.vec4();
+        var mapShader,receiverShader
         function renderShadowCasters(engine, light, light_camera, meshes) {
             castCount = 0;
 
             for (m = 0; m < meshes.length; m++) {
                 mesh = meshes[m];
                 if (mesh.material.flags & tge.SHADING.CAST_SHADOW) {
-                    if (!light.validShadowCaster(light_camera, mesh.model)) continue;
-                    
-
-                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
-                        tge.vec4.copy(tge_u_shadowColor, mesh.material.diffuse); 
-                    }
-                    else {
-                        tge.vec4.set(tge_u_shadowColor, 0.5,0.5, 0.5, 0.5);
-                    }
-
-                    tge_u_shadowColor[3] = mesh.material.ambient[3];
-
-                    castCount++;
-                    if (!mesh.material.shader.depthShader) {
-                        mesh.material.shader.depthShader = tge.pipleline_shader.parse(`<?=chunk('precision')?>
-
-uniform sampler2D tge_u_ambientTexture;
-varying vec2 tge_v_uv;
-uniform mat4 tge_u_objectMaterial;
-uniform vec4 tge_u_shadowColor;
-
-void fragment(void) {
-vec4 c=texture2D(tge_u_ambientTexture, tge_v_uv);
-if(c.w<0.02) discard;
-gl_FragColor=mix(vec4(1.0),1.0-tge_u_shadowColor,1.0-tge_u_shadowColor.a);
-gl_FragColor=mix(gl_FragColor,1.0-c,1.0-c.a);
-
-gl_FragColor.a=c.a*tge_u_shadowColor.a;
-}`, mesh.material.shader, true);
-                        mesh.material.shader.depthShader.shadowShader = true;
-                    }
-                    if (engine.useMaterial(mesh.material, mesh.material.shader.depthShader)) {
+                    if (!light.validShadowCaster(light_camera, mesh.model)) continue;                                     
+                    castCount++;                                     
+                    if (engine.useMaterial(mesh.material, light.getShadowMapShader(mesh.material.shader))) {
 
                     }    
-                    engine.activeShader.setUniform("tge_u_shadowColor", tge_u_shadowColor);
+                    if (light.coloredShadows) {
+                        if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                            tge.vec4.copy(tge_u_shadowColor, mesh.material.diffuse);
+                        }
+                        else {
+                            tge.vec4.set(tge_u_shadowColor, 0.5, 0.5, 0.5, 0.5);
+                        }
+
+                        tge_u_shadowColor[3] = mesh.material.ambient[3];
+
+                        engine.activeShader.setUniform("tge_u_shadowColor", tge_u_shadowColor);
+                    }
+
+               
                     engine.updateCameraUniforms(light_camera);
                     engine.updateModelViewMatrix(light_camera, mesh.model);                    
                     engine.renderMesh(mesh);
@@ -4598,7 +4639,7 @@ gl_FragColor.a=c.a*tge_u_shadowColor.a;
 
             engine.setDefaultViewport();
 
-            tge_u_shadow_params[0] = light.shadowOpacity*0.65;
+            tge_u_shadow_params[0] = light.shadowOpacity*0.5;
             tge_u_shadow_params[1] = 1 / light.shadowMapSize;
             tge_u_shadow_params[2] = light.shadowBias;
 
@@ -5247,127 +5288,107 @@ tge.post_process.glow = $extend(function (proto, _super) {
 
 
 
-    function glow() {
+    function glow(params) {
         _super.apply(this);
+        params = params || {};
+
+        this.resolution = params.resolution || 0.5;
+        this.resolution_last = this.resolution;
+        this.blurQuality = params.blurQuality || 10;                
+        this.brightThreshold = tge.vec4(params.brightThreshold || [0.2627, 0.6780, 0.0593, -0.5]);
+        this.blendExposure = params.blendExposure || 1;
+        this.blendGamma = params.blendGamma || 1;
+        this.blendFactor = params.blendFactor || 3.0;
+        this.tge_u_offset = tge.vec2();
+        this.blurKernel = tge.vec3([5.0 / 16.0, 6 / 16.0, 5 / 16.0]);
         
-
-        this.blur = new tge.post_process.kawase_blur();
-
     }
 
     var chunks = tge.shader.createChunksLib(`/*chunk-emission-filter*/
-
+uniform vec4 tge_u_brightThreshold;
 void fragment(){
  vec4 color = texture2D(tge_u_texture_input, tge_v_uv);
- float luminance = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593)*0.75 );
- //gl_FragColor = (luminance > 0.5) ? color : vec4(0);
+ float luminance = dot(color.rgb, tge_u_brightThreshold.xyz );
+ luminance+=(color.a+tge_u_brightThreshold.w);
  gl_FragColor = luminance* color;
 }
 
 /*chunk-blur*/
 
 uniform vec2 tge_u_offset;
-uniform vec3 tge_u_blur;
+uniform vec3 tge_u_blurKernel;
 void fragment(){
-vec3 A = tge_u_blur.x* texture2D(tge_u_texture_input, tge_v_uv - tge_u_offset).xyz;
-vec3 B = tge_u_blur.y* texture2D(tge_u_texture_input, tge_v_uv).xyz;
-vec3 C = tge_u_blur.z* texture2D(tge_u_texture_input, tge_v_uv + tge_u_offset).xyz;
+vec3 A = tge_u_blurKernel.x* texture2D(tge_u_texture_input, tge_v_uv - tge_u_offset).xyz;
+vec3 B = tge_u_blurKernel.y* texture2D(tge_u_texture_input, tge_v_uv).xyz;
+vec3 C = tge_u_blurKernel.z* texture2D(tge_u_texture_input, tge_v_uv + tge_u_offset).xyz;
 vec3 color = A + B + C;
 gl_FragColor = vec4(color, 1);
 
 }
 
-/*chunk-temp*/
-
-
-float weight[5];
-
-
-weight[0]=0.227027;
-weight[1]=0.1945946;
-weight[2]=0.1216216;
-weight[3]=0.054054;
-weight[4]=0.016216;
-
-vec3 result = texture2D(tge_u_glow_emission, tge_v_uv).rgb * weight[0];
-float ii=0.0;
-for(int i = 1; i < 5; ++i)
-{
-ii=float(i);
-result += texture2D(tge_u_glow_emission, tge_v_uv + (tge_u_offset*ii)).rgb * weight[i];
-result += texture2D(tge_u_glow_emission, tge_v_uv - (tge_u_offset*ii)).rgb * weight[i];
-}
-gl_FragColor = vec4(result, 1.0);
-
-vec4 c = vec4(0.0);
-c += texture2D(tge_u_glow_emission, tge_v_uv - tge_u_offset * 5.5) * 0.00598;
-c += texture2D(tge_u_glow_emission, tge_v_uv - tge_u_offset * 3.5) * 0.060626;
-c += texture2D(tge_u_glow_emission, tge_v_uv - tge_u_offset * 1.5) * 0.241843;
-c += texture2D(tge_u_glow_emission, tge_v_uv) * 0.383103;
-c += texture2D(tge_u_glow_emission, tge_v_uv + tge_u_offset * 1.5) * 0.241843;
-c += texture2D(tge_u_glow_emission, tge_v_uv + tge_u_offset * 3.5) * 0.060626;
-c += texture2D(tge_u_glow_emission, tge_v_uv + tge_u_offset * 5.5) * 0.00598;
-
-gl_FragColor =c;
-
- vec3 A =texture2D(tge_u_glow_emission, tge_v_uv - Offset).xyz;
- vec3 B =texture2D(tge_u_glow_emission, tge_v_uv).xyz;
- vec3 C =texture2D(tge_u_glow_emission, tge_v_uv + Offset).xyz;
- vec3 color = A + B + C;
- gl_FragColor = vec4(color, 1);
-
 
 
 /*chunk-merge*/
 uniform sampler2D tge_u_glow_emission;
-
+uniform vec3 tge_u_glow_params;
 void fragment(){
 vec4 cBase = texture2D(tge_u_texture_input, tge_v_uv);
 vec4 cOver = texture2D(tge_u_glow_emission, tge_v_uv);
-float exposure = 1.0;
-float gamma = 1.0;
-vec4 blend = cBase + cOver * 3.0;
-blend = vec4(1.0) - exp(-blend * exposure); // tone mapping
-blend = pow(blend, vec4(1.0 / gamma)); // gamma correct
+vec4 blend = cBase + cOver * tge_u_glow_params.z;
+blend = vec4(1.0) - exp(-blend * tge_u_glow_params.x);
+blend = pow(blend, vec4(1.0 / tge_u_glow_params.y));
 gl_FragColor =blend;
 }`)
-    console.log("chunks", chunks);
 
 
     glow.emission_shader = tge.post_process.shader.extend(chunks["emission-filter"]);
     glow.merge_shader = tge.post_process.shader.extend(chunks["merge"]);
     glow.blur_shader = tge.post_process.shader.extend(chunks["blur"]);
 
-    proto.resize = function (width, height) {
-        this.emission_map.resize(width, height);
-    }
+
+    proto.resize = function () {
+        this.resolution_last = -1;
+    };
 
 
 
+    var i = 0, t = 0;
+    var tge_u_glow_params = tge.vec3();
     proto.apply = function (engine, input, output) {
 
         if (!this.targets) {
-            var sz = 0.5;
+            
             this.targets = [new tge.rendertarget(engine.gl,
-                input.width * sz, input.height * sz),
+                input.width * this.resolution, input.height * this.resolution),
             new tge.rendertarget(engine.gl,
-                input.width * sz, input.height * sz)];
-
-            this.tge_u_offset = tge.vec2();
-            this.tge_u_blur = tge.vec3(5.0 / 16.0, 6 / 16.0, 5 / 16.0);
-            tge.vec3.set(this.tge_u_blur, 5 / 16, 6 / 16, 5 / 16);
+                input.width * this.resolution, input.height * this.resolution)];
         }
-        engine.gl.disable(engine.gl.DEPTH_TEST);
+
+        else {
+
+            if (this.resolution_last !== this.resolution) {
+                this.targets[0].resize(input.width * this.resolution, input.height * this.resolution);
+                this.targets[1].resize(input.width * this.resolution, input.height * this.resolution);
+                
+            }
+
+
+        }
+        this.resolution_last = this.resolution;
+        
+
         engine.useShader(tge.post_process.glow.emission_shader);
+        engine.activeShader.setUniform("tge_u_brightThreshold", this.brightThreshold);
         this.targets[0].bind();        
         engine.useTexture(input, 0);
         engine.renderFullScreenQuad();
 
 
         engine.useShader(tge.post_process.glow.blur_shader);
-        engine.activeShader.setUniform("tge_u_blur", this.tge_u_blur);
-        var t=0;
-        for (var i = 1; i < 8; i++) {
+        engine.activeShader.setUniform("tge_u_blurKernel", this.blurKernel);
+      
+        t=0;
+        for (i = 1; i < this.blurQuality; i++) {
             t = i % 2;
             this.targets[t].bind();
             engine.useTexture(this.targets[(t === 0 ? 1 : 0)].colorTexture, 0);
@@ -5384,14 +5405,15 @@ gl_FragColor =blend;
                 
         this.bind_output(engine, output);
         engine.useTexture(input, 0);
-        engine.useShader(tge.post_process.glow.merge_shader);        
+        engine.useShader(tge.post_process.glow.merge_shader);
+        tge_u_glow_params[0] = this.blendExposure;
+        tge_u_glow_params[1] = this.blendGamma;
+        tge_u_glow_params[2] = this.blendFactor;
+        engine.activeShader.setUniform("tge_u_glow_params", tge_u_glow_params);
         engine.activeShader.setUniform("tge_u_glow_emission", 1)
         engine.useTexture(this.targets[t].colorTexture, 1);
-
         engine.renderFullScreenQuad();
 
-
-        engine.gl.enable(engine.gl.DEPTH_TEST);
     }
 
     proto.apply2 = function (engine, input, output) {
@@ -5811,7 +5833,7 @@ tge.engine = $extend(function (proto) {
 
         var dummyLight = new tge.light();
         dummyLight.setAmbient(0, 0, 0).setSpecular(0, 0, 0).setDiffuse(0, 0, 0).setIntensity(0);
-        dummyLight.attenuation[3] = 1;
+        dummyLight.attenuation[3] = 0.5;
 
         var i2 = 0;
         return function (camera) {
@@ -5988,6 +6010,31 @@ tge.engine = $extend(function (proto) {
             }     
               
 
+
+
+            //post_process_input = _this._defaultRenderTarget.colorTexture;
+            //i1 = 0;
+            //for (i4 = 0; i4 < _this.post_processes.length; i4++) {
+            //    post_process = _this.post_processes[i4];
+            //    if (post_process.enabled && post_process.drawLastFrame) {
+            //        if (i1 % 2 === 0) {
+            //            post_process.drawLastFrame(_this, post_process_input, _this.postProcessTarget);
+            //            post_process_input = _this.postProcessTarget.colorTexture;
+            //            post_process_output = _this._defaultRenderTarget;
+            //        }
+
+            //        else {
+            //            post_process.drawLastFrame(_this, post_process_input, _this._defaultRenderTarget);
+            //            post_process_input = _this._defaultRenderTarget.colorTexture;
+            //            post_process_output = _this.postProcessTarget;
+            //        }
+            //        i1++;
+            //    }
+            //}
+
+
+          //  tge.post_process.flat(_this, post_process_input, post_process_output);
+
            
             for (i4 = 0; i4 < lights.length; i4++) {
                 light = lights[i4];                
@@ -5996,7 +6043,12 @@ tge.engine = $extend(function (proto) {
 
             }
             _this.disableFWRendering();
+
             
+
+
+
+
 
 
             _this.gl.enable(_this.gl.CULL_FACE);
@@ -6053,6 +6105,7 @@ tge.engine = $extend(function (proto) {
 
             post_process_input = _this._defaultRenderTarget.colorTexture;
             i1 = 0;
+            _this.gl.disable(_this.gl.DEPTH_TEST);
             for (i4 = 0; i4 < _this.post_processes.length; i4++) {
                 post_process = _this.post_processes[i4];
                 if (post_process.enabled) {
@@ -6068,7 +6121,7 @@ tge.engine = $extend(function (proto) {
                     i1++;
                 }
             }
-
+            _this.gl.enable(_this.gl.DEPTH_TEST);
                         
             tge.post_process.flat(_this, post_process_input, null);
             _this.textureSlots[0] = -1;

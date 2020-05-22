@@ -81,6 +81,7 @@ tge.light = $extend(function (proto, _super) {
         this.shadowCameraDistance = 20;
         this.shadowFlipFaces = true;
         this.castShadows = false;
+        this.coloredShadows = false;
 
         this.flags = tge.OBJECT_TYPES.STATIC_LIGHT;
         this.shadowMapSize = 1024;
@@ -104,12 +105,38 @@ tge.light = $extend(function (proto, _super) {
     }
 
     proto.getShadowReceiverShader = function (shader) {
-        if (!shader.default_shadow_receiver) {
-            shader.default_shadow_receiver = tge.pipleline_shader.parse(import('color_shadow_receiver.glsl'), shader, true);
-            shader.default_shadow_receiver.shadowShader = true;
+        if (this.coloredShadows) {
+            if (!shader.colored_shadow_receiver) {
+                shader.colored_shadow_receiver = tge.pipleline_shader.parse(tge.light.colored_shadows['receiver'], shader, true);
+                shader.colored_shadow_receiver.shadowShader = true;
+            }
+            return shader.colored_shadow_receiver;
         }
-        return shader.default_shadow_receiver;
-    }
+        else {
+            if (!shader.default_shadow_receiver) {
+                shader.default_shadow_receiver = tge.pipleline_shader.parse(tge.light.default_shadows['receiver'], shader, true);
+                shader.default_shadow_receiver.shadowShader = true;
+            }
+            return shader.default_shadow_receiver;
+        }
+    };
+
+    proto.getShadowMapShader = function (shader) {
+        if (this.coloredShadows) {
+            if (!shader.colored_shadow_map) {
+                shader.colored_shadow_map = tge.pipleline_shader.parse(tge.light.colored_shadows['map'], shader, true);
+                shader.colored_shadow_map.shadowShader = true;
+            }
+            return shader.colored_shadow_map;
+        }
+        else {
+            if (!shader.default_shadow_map) {
+                shader.default_shadow_map = tge.pipleline_shader.parse(tge.light.default_shadows['map'], shader, true);
+                shader.default_shadow_map.shadowShader = true;
+            }
+            return shader.default_shadow_map;
+        }
+    };
 
     proto.updateLightCamera = function (light_camera, camera) {
         light_camera.worldPosition[0] = (camera.fwVector[0] * (-this.shadowCameraDistance)) + camera.worldPosition[0];
@@ -130,6 +157,9 @@ tge.light = $extend(function (proto, _super) {
     };
 
 
+    light.colored_shadows = tge.shader.createChunksLib(import('colored_shadows.glsl'));
+    light.default_shadows = tge.shader.createChunksLib(import('default_shadows.glsl'));
+
 
 
     proto.renderShadows = (function () {
@@ -137,33 +167,32 @@ tge.light = $extend(function (proto, _super) {
         var castCount, updateLightCameraMatrices, light_camera;
         var tge_u_shadow_params = tge.vec3(), tge_u_light_pos = tge.vec3();
         var tge_u_shadowColor = tge.vec4();
+        var mapShader,receiverShader
         function renderShadowCasters(engine, light, light_camera, meshes) {
             castCount = 0;
 
             for (m = 0; m < meshes.length; m++) {
                 mesh = meshes[m];
                 if (mesh.material.flags & tge.SHADING.CAST_SHADOW) {
-                    if (!light.validShadowCaster(light_camera, mesh.model)) continue;
-                    
-
-                    if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
-                        tge.vec4.copy(tge_u_shadowColor, mesh.material.diffuse); 
-                    }
-                    else {
-                        tge.vec4.set(tge_u_shadowColor, 0.5,0.5, 0.5, 0.5);
-                    }
-
-                    tge_u_shadowColor[3] = mesh.material.ambient[3];
-
-                    castCount++;
-                    if (!mesh.material.shader.depthShader) {
-                        mesh.material.shader.depthShader = tge.pipleline_shader.parse(import('color_shadow_map.glsl'), mesh.material.shader, true);
-                        mesh.material.shader.depthShader.shadowShader = true;
-                    }
-                    if (engine.useMaterial(mesh.material, mesh.material.shader.depthShader)) {
+                    if (!light.validShadowCaster(light_camera, mesh.model)) continue;                                     
+                    castCount++;                                     
+                    if (engine.useMaterial(mesh.material, light.getShadowMapShader(mesh.material.shader))) {
 
                     }    
-                    engine.activeShader.setUniform("tge_u_shadowColor", tge_u_shadowColor);
+                    if (light.coloredShadows) {
+                        if ((mesh.material.flags & tge.SHADING.TRANSPARENT) !== 0) {
+                            tge.vec4.copy(tge_u_shadowColor, mesh.material.diffuse);
+                        }
+                        else {
+                            tge.vec4.set(tge_u_shadowColor, 0.5, 0.5, 0.5, 0.5);
+                        }
+
+                        tge_u_shadowColor[3] = mesh.material.ambient[3];
+
+                        engine.activeShader.setUniform("tge_u_shadowColor", tge_u_shadowColor);
+                    }
+
+               
                     engine.updateCameraUniforms(light_camera);
                     engine.updateModelViewMatrix(light_camera, mesh.model);                    
                     engine.renderMesh(mesh);
@@ -272,7 +301,7 @@ tge.light = $extend(function (proto, _super) {
 
             engine.setDefaultViewport();
 
-            tge_u_shadow_params[0] = light.shadowOpacity*0.65;
+            tge_u_shadow_params[0] = light.shadowOpacity*0.5;
             tge_u_shadow_params[1] = 1 / light.shadowMapSize;
             tge_u_shadow_params[2] = light.shadowBias;
 

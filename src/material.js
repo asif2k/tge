@@ -55,7 +55,7 @@ tge.material = $extend(function (proto,_super) {
     $assign(proto, tge.flags.prototype);
 
     proto.setTansparency = function (v) {
-        if (v > 1) v = 1;
+        if (v >= 1) v = 0.5;
         this.ambient[3] = v;
         if (v < 1) this.setFlag(tge.SHADING.TRANSPARENT);
         else this.unsetFlag(tge.SHADING.TRANSPARENT);
@@ -65,6 +65,7 @@ tge.material = $extend(function (proto,_super) {
         this.specular[3] = shin;
         return (this);
     };
+    
 
     proto.setDepthTest = function (on) {
         if (on)
@@ -157,8 +158,8 @@ tge.material = $extend(function (proto,_super) {
         tge.flags.apply(this, arguments);
 
         this.uuid = $guidi();
-        this.ambient[3] = 1;
 
+        
         this.textureMatrix = tge.mat3();
 
         this.shader = tge.material.shader;
@@ -170,6 +171,7 @@ tge.material = $extend(function (proto,_super) {
         this.setFlag(tge.SHADING.FLAT);
         this.drawType = tge.DRAW_TYPES.TRIANGLES;
         this.setShinness(options.shinness || 100);
+        this.ambient[3] = 0.1;
         this.noDepthTest = false;
         return (this);
 
@@ -222,27 +224,6 @@ tge.material = $extend(function (proto,_super) {
 }, tge.material_base); tge.material.init();
 
 
-tge.glow_material = $extend(function (proto, _super) {
-
-    function glow_material(options) {
-        options = options || {};
-        _super.apply(this, arguments);
-        this.shader = tge.glow_material.shader;
-        this.setAmbient(1, 1, 1);
-        this.setBrightness(212);
-        return (this);
-    }
-
-    proto.setBrightness = function (b) {
-        this.ambient[3] = b;
-    };
-
-
-    glow_material.shader = tge.pipleline_shader.parse(import('flat_material.glsl'));
-
-    return glow_material;
-
-}, tge.material);
 
 tge.phong_material = $extend(function (proto, _super) {
    

@@ -48,13 +48,10 @@ void fragment(void) {
 				tge_u_lightMatrix<?=i?>[2].xyz);
 	<?}?>
 	gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * texture2D(tge_u_ambientTexture, tge_v_uv);
-	gl_FragColor.w *= tge_u_objectMaterial[0].w;
-	/*
-	vec2 iResolution=vec2(2435.0,1907.0);
-	vec2 uv = vec2(gl_FragCoord.xy/ iResolution.xy);
-    uv.y =  uv.y;
-	gl_FragColor-=(texture2D(tge_u_lightMap,uv));
-	*/
+	gl_FragColor.w*=tge_u_objectMaterial[0].w;
+
+	
+
 
 }
 

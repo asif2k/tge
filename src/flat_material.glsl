@@ -30,4 +30,5 @@ varying vec4 tge_v_shadow_vertex;
 void fragment(void) {
 	initPipelineParams();
 	gl_FragColor = texture2D(tge_u_ambientTexture, tge_v_uv) * tge_v_color * tge_u_objectMaterial[0];
+	gl_FragColor.w*=tge_u_objectMaterial[0].w;
 }
