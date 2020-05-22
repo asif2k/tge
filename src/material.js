@@ -126,7 +126,7 @@ tge.material = $extend(function (proto,_super) {
 
     }
     proto.useShader = function (shader,engine) {
-        if ((this.flags & tge.SHADING.NO_DEPTH_TEST) !== 0) {
+        if ((this.noDepthTest)) {
             engine.gl.disable(engine.gl.DEPTH_TEST);
         }
         else {
@@ -167,10 +167,10 @@ tge.material = $extend(function (proto,_super) {
         this.normalMap = null;
         this.envMap = null;
         this.dispMap = null;
-        this.flags = tge.SHADING.FLAT | tge.SHADING.DEPTH_TEST;
+        this.setFlag(tge.SHADING.FLAT);
         this.drawType = tge.DRAW_TYPES.TRIANGLES;
         this.setShinness(options.shinness || 100);
-
+        this.noDepthTest = false;
         return (this);
 
     }
@@ -221,6 +221,28 @@ tge.material = $extend(function (proto,_super) {
 
 }, tge.material_base); tge.material.init();
 
+
+tge.glow_material = $extend(function (proto, _super) {
+
+    function glow_material(options) {
+        options = options || {};
+        _super.apply(this, arguments);
+        this.shader = tge.glow_material.shader;
+        this.setAmbient(1, 1, 1);
+        this.setBrightness(212);
+        return (this);
+    }
+
+    proto.setBrightness = function (b) {
+        this.ambient[3] = b;
+    };
+
+
+    glow_material.shader = tge.pipleline_shader.parse(import('flat_material.glsl'));
+
+    return glow_material;
+
+}, tge.material);
 
 tge.phong_material = $extend(function (proto, _super) {
    

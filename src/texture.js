@@ -256,21 +256,37 @@ tge.rendertarget = $extend(function (proto,_super) {
         if (this.clearBuffer) this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
 
     }
+
+    proto.addTexture = function (width, height) {
+        width = width || this.width;
+        height = height || this.height;
+        this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), this.gl.COLOR_ATTACHMENT0);
+        this.textures[this.textures.length] = this.colorTexture;
+        return this.colorTexture;
+    };
+
+    proto.activateTexture = function (i) {
+        if (i < this.textures.length) {
+            this.colorTexture = this.textures[i];
+            this.gl.bindTexture(this.gl.TEXTURE_2D, this.colorTexture.webglTexture);
+            this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.colorTexture.webglTexture, 0);
+
+        }
+        return this.colorTexture;
+    }
     function rendertarget(gl, width, height, withDepth) {
         _super.apply(this, arguments);
-        this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), gl.COLOR_ATTACHMENT0);
+        this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), this.gl.COLOR_ATTACHMENT0);
 
         if (withDepth) {
             this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT ,false, width, height), gl.DEPTH_ATTACHMENT);
             this.depthTexture.targetId = this.uuid;
 
-          //  this.depthTexture.P("TEXTURE_MAG_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR);
-           // this.depthTexture.P("TEXTURE_MIN_FILTER", tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR);
-
             this.depthTexture.P("TEXTURE_WRAP_S", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
             this.depthTexture.P("TEXTURE_WRAP_T", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
 
         }
+        this.textures = [this.colorTexture];
         this.vpLeft = 0;
         this.vpTop = 0;
         this.width = width;

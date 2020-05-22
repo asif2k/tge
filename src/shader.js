@@ -194,10 +194,21 @@ tge.shader = $extend(function (proto) {
             }
 
         });
-
-
-
     };
+
+    shader.createChunksLib = function (text) {
+        var lib = {}, name;
+        text.split('/*chunk-').forEach(function (chunk) {
+            chunk = chunk.trim();
+            if (chunk.length > 0) {
+                name = chunk.substr(0, chunk.indexOf('*/') + 2);
+                chunk = chunk.replace(name, '');
+                name = name.replace('*/', '');
+                lib[name] = chunk;
+            }
+        });
+        return lib;
+    }
 
     shader.loadChunks(import('shader_chunks.glsl'));
     

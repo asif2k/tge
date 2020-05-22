@@ -174,10 +174,6 @@ tge.engine = $extend(function (proto) {
         gl.clearColor(0, 0, 0, 1);
 
 
-        this.final_post_process = new tge.post_process();
-
-
-
 
       
 
@@ -529,7 +525,7 @@ tge.engine = $extend(function (proto) {
 
             }
 
-            
+             
             
             if (opuqueMeshes.length > 0) {
                 _this.renderLighting(camera, lights, function (updateShadingLights) {
@@ -547,16 +543,18 @@ tge.engine = $extend(function (proto) {
 
                 });
             }
+            //_this.disableFWRendering();
 
-            _this.disableFWRendering();
             for (i4 = 0; i4 < flatMeshes.length; i4++) {
                 mesh = flatMeshes[i4];
                 if (_this.useMaterial(mesh.material, mesh.material.shader)) {
                     _this.updateCameraUniforms(camera);
                 }
+                
                 _this.updateModelViewMatrix(camera, mesh.model);
                 _this.renderMesh(mesh);
-            }        
+            }     
+              
 
            
             for (i4 = 0; i4 < lights.length; i4++) {
@@ -565,6 +563,10 @@ tge.engine = $extend(function (proto) {
                     light.renderShadows(_this, camera, opuqueMeshes, transparentMeshes);
 
             }
+            _this.disableFWRendering();
+            
+
+
             _this.gl.enable(_this.gl.CULL_FACE);
         
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
@@ -614,6 +616,9 @@ tge.engine = $extend(function (proto) {
             }
             _this.disableFWRendering();
 
+
+
+
             post_process_input = _this._defaultRenderTarget.colorTexture;
             i1 = 0;
             for (i4 = 0; i4 < _this.post_processes.length; i4++) {
@@ -632,9 +637,8 @@ tge.engine = $extend(function (proto) {
                 }
             }
 
-            _this.final_post_process.apply(_this, post_process_input, null);
                         
-
+            tge.post_process.flat(_this, post_process_input, null);
             _this.textureSlots[0] = -1;
             _this.updateTextures();
 

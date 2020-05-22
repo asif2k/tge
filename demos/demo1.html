@@ -1,65 +1,135 @@
 ﻿<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
-    <meta charset="utf-8" />
-    <title></title>   
+  <meta charset="utf-8" />
+  <title></title>
 </head>
 <body>
-  <script  src="../tge.js"></script>
+
+  <script src="../tge.js"></script>
 
   <script>
 
-    tge.demo({}, function (app, engine, scene, camera) {
-
-
-      var light1 = scene.addLight(new tge.light(), function (lg) {
+    tge.demo({ fws_lightsCount: 8, pixelRatio1: 1 }, function (app, engine, scene, camera) {
+      var light0 = scene.addLight(new tge.point_light(), function (lg) {
         lg.setPosition(0, 5, 0);
-        lg.setDiffuse(0.5, 0.5, 0.5);
-        lg.setAmbient(0.338, 0.338, 0.338).setSpecular(0.5, 0.5, 0.5).setIntensity(1);
-        lg.setRotation(-50 * tge.DEGTORAD, 0, 0);
+        lg.setDiffuse(0.6, 0.6, 0.6);
+        lg.setAmbient(0.364338, 0.364338, 0.364338).setSpecular(0.385, 0.385, 0.385).setIntensity(7);
+        //lg.setRotation(-0.613335132598877, -0.5680001378059387, 0.5235987901687622);
+        lg.setRotation(-0.613335132598877, 1, 0);
+        lg.shadowMapSize = 2048;
+        lg.shadowCameraDistance = 20;
+        lg.castShadows = true;
+
+        // lg.enabled = false;
         scene.addModel(lg.getDisplay());
-
+        scene.addModel(new tge.model(tge.geometry.sphere({ size: 1,divs:16}), new tge.glow_material()), function (md, mesh) {
+          md.parent = lg;
+          md.setScaling(0.25, 0.25, 0.25);
+          mesh.material.setAmbient(1, 1, 1);
+        });
       });
 
-      scene.addModel(new tge.model(tge.geometry.plane({ size: 100, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
+
+
+      tge.geometry.wavefront_obj_url("models/mon2.obj", function (geo) {
+        scene.addModel(new tge.model(geo, new tge.material()), function (md, mesh) {
+          md.setPosition(7, 0.5, 0);
+          mesh.material.setAmbient(0, 0, 1).setDiffuse(0, 0, 1);
+          //mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
+        });
+      });
+
+      scene.addModel(new tge.model(tge.geometry.sphere({ size: 2, divs: 16 }), new tge.glow_material()), function (md, mesh) {
+        md.setPosition(10, 0.5, 0);
+        mesh.material.setAmbient(1,0,0);
+      });
+
+      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
         md.setPosition(0, -0.5, 0);
-        mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
-        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 8, 8, 0);
-        mesh.material.normalMap = tge.texture.from_url('textures/nm9.jpg');
-        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW);
-        //mesh.material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
-        md.setRotation(-90 * tge.DEGTORAD, 0, 0);      
+        mesh.material.setAmbient(0.8455, 0.8455, 0.8455).setSpecular(0, 0, 0);
+        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 64, 64, 0);
+
+        tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0, 32, 32, 0);
+        mesh.material.normalMap = tge.texture.from_url('textures/norm6.jpg');
+        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW); //.setAmbientRandom();
+        mesh.material.ambientTexture = tge.texture.from_url('textures/tex4.jpg');
+        md.setRotation(-90 * tge.DEGTORAD, 0, 0);
       });
 
-      scene.addModel(new tge.model(tge.geometry.cube(), new tge.phong_material()), function (md, mesh) {
-        mesh.material.setAmbient(0.5, 1, 0.5);
-        mesh.material.setFlag(tge.SHADING.CAST_SHADOW).setFlag(tge.SHADING.RECEIVE_SHADOW);
-      });
+
+
+
+
+      scene.createRandomModelsGrid(50, 8, function (md, i) {
+        md.position[1] = Math.random() * 3;
+        md.meshes[0].material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
+        // md.meshes[0].material.setAmbient(0, 0, 0);
+        if (Math.floor(Math.random() * 3) == 1) {
+
+          //  md.meshes[0].material.setFlag(tge.SHADING.DOUBLE_SIDES);
+          md.meshes[0].material.setTansparency(0.7);
+          //md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r5.jpg');
+        }
+        else {
+          md.meshes[0].material.setShinness(110);
+        }
+        if (Math.floor(Math.random() * 3) == 1) {
+          md.meshes[0].material.ambientTexture = tge.texture.from_url('textures/r4.jpg');
+        }
+
+
+
+
+
+
+
+
+
+      }, tge.phong_material);
+
+
       app.mouseDrage2 = (function (base) {
         return function (dx, dy, e) {
           if (!e.ctrlKey) return base.apply(this, arguments);
-          else light1.yawPitch(-dy * 0.005, -dx * 0.005);
+          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
         }
       })(app.mouseDrage2);
 
-
       app.mouseWheel = (function (base) {
         return function (sp, e) {
-          if (e.buttons === 2) light1.moveFrontBack(-0.005 * sp);
+          if (e.buttons === 2) light0.moveFrontBack(-0.005 * sp);
           else base.apply(this, arguments);
         }
       })(app.mouseWheel);
 
-      camera.setPosition(-0.02603265456855297, 4.681277275085449, 11.607051849365234);
 
-      app.playLoop(function (delta, time) {
+
+
+      camera.setPosition(-0.0260, 4.68, 11.60);
+
+    //  new tge.post_process.fxaa(),
+      //  new tge.post_process.glow(), 
+      //   new tge.post_process.kawase_blur(), 
+      //  new tge.post_process.radial_blur(), 
+      //new tge.post_process.kawase_blur()
+      engine.post_processes = [
+        new tge.post_process.glow(),
+        new tge.post_process.fxaa(),
+       
         
+
+      ]
+      app.playLoop(function (delta, time) {
+        if (light0.version < 3) light0.version++;
+
+
         if (camera.update()) {
-         scene.renderList.meshes.sorted = false;    
+          scene.renderList.meshes.sorted = false;
         }
         scene.updateRenderList(camera);
 
-        engine.setDefaultViewport().clearScreen();
+
         engine.renderList(camera, scene.renderList.meshes, scene.renderList.lights)
 
 

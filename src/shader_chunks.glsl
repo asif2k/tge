@@ -202,7 +202,7 @@ float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, f
 }
 
 
-/*chunk-defaultPostProcessShader*/
+/*chunk-post_process_flat*/
 <?=chunk('precision')?>
 <?=chunk('pipelineParams')?>
 
