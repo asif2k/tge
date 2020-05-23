@@ -98,18 +98,18 @@ tge.material = $extend(function (proto,_super) {
 
         if (shader.shadowShader) {
             if ((this.flags & tge.SHADING.SHADOW_DOUBLE_SIDES) !== 0) {
-                engine.gl.disable(engine.gl.CULL_FACE);
+                engine.gl.disable(GL_CULL_FACE);
             }
             else {
-                engine.gl.enable(engine.gl.CULL_FACE);
+                engine.gl.enable(GL_CULL_FACE);
             }
         }
         else {
             if ((this.flags & tge.SHADING.DOUBLE_SIDES) !== 0) {
-                engine.gl.disable(engine.gl.CULL_FACE);
+                engine.gl.disable(GL_CULL_FACE);
             }
             else {
-                engine.gl.enable(engine.gl.CULL_FACE);
+                engine.gl.enable(GL_CULL_FACE);
             }
         }
 
@@ -119,7 +119,7 @@ tge.material = $extend(function (proto,_super) {
         mesh.drawCount = mesh.geo.numItems;
 
         if (mesh.geo.indexData) {
-            engine.gl.drawElements(this.drawType, mesh.drawCount, engine.gl.UNSIGNED_SHORT, mesh.drawOffset);
+            engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
         }
         else {
             engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
@@ -128,10 +128,10 @@ tge.material = $extend(function (proto,_super) {
     }
     proto.useShader = function (shader,engine) {
         if ((this.noDepthTest)) {
-            engine.gl.disable(engine.gl.DEPTH_TEST);
+            engine.gl.disable(GL_DEPTH_TEST);
         }
         else {
-            engine.gl.enable(engine.gl.DEPTH_TEST);
+            engine.gl.enable(GL_DEPTH_TEST);
         }
 
       
@@ -169,7 +169,7 @@ tge.material = $extend(function (proto,_super) {
         this.envMap = null;
         this.dispMap = null;
         this.setFlag(tge.SHADING.FLAT);
-        this.drawType = tge.DRAW_TYPES.TRIANGLES;
+        this.drawType = GL_TRIANGLES;
         this.setShinness(options.shinness || 100);
         this.ambient[3] = 0.1;
         this.noDepthTest = false;
@@ -200,7 +200,7 @@ tge.material = $extend(function (proto,_super) {
 
 
         tge.material.Lines = tge.material.Black_Rubber.clone();
-        tge.material.Lines.drawType = tge.DRAW_TYPES.LINES;
+        tge.material.Lines.drawType = GL_LINES;
 
 
 
@@ -212,7 +212,7 @@ tge.material = $extend(function (proto,_super) {
         tge.material.LinesSelected.setAmbient(1, 1, 1);
 
         tge.material.Points = tge.material.LinesSelected.clone();
-        tge.material.Lines.drawType = tge.DRAW_TYPES.POINT;
+        tge.material.Lines.drawType = GL_POINTS;
 
         tge.material.LinesRed = tge.material.Lines.clone();
         tge.material.LinesRed.setAmbient(1, 0, 0);
@@ -276,3 +276,47 @@ tge.parallax_material = $extend(function (proto, _super) {
 
 }, tge.phong_material);
 
+
+
+tge.skybox_material = $extend(function (proto, _super) {
+
+    function skybox_material(options) {
+        options = options || {};
+        _super.apply(this, arguments);
+        this.shader = tge.skybox_material.shader;
+
+        return (this);
+
+    }
+    var viewDirectionProjectionMatrix = tge.mat4();
+    var viewDirectionProjectionInverseMatrix  = tge.mat4();
+    proto.renderMesh = function (engine, shader, mesh) {
+
+
+        
+        if (mesh.skyboxCameraVersion !== engine.currentCamera.version) {
+            engine.currentCamera.matrixWorldInvserse[12] = 0;
+            engine.currentCamera.matrixWorldInvserse[13] = 0;
+            engine.currentCamera.matrixWorldInvserse[14] = 0;
+
+            tge.mat4.multiply(viewDirectionProjectionMatrix, engine.currentCamera.matrixProjection,
+                engine.currentCamera.matrixWorldInvserse
+            );
+
+            tge.mat4.invert(viewDirectionProjectionInverseMatrix, viewDirectionProjectionMatrix);
+            mesh.skyboxCameraVersion = engine.currentCamera.version;
+            
+        }
+
+        
+        shader.setUniform("viewDirectionProjectionInverseMatrix", viewDirectionProjectionInverseMatrix);
+        engine.useTexture(this.ambientTexture, 0);
+        engine.gl.depthFunc(GL_LEQUAL);
+
+        engine.gl.drawArrays(this.drawType, 0, mesh.geo.numItems);
+    };
+    skybox_material.shader = tge.pipleline_shader.parse(import('skybox_material.glsl'));
+
+    return skybox_material;
+
+}, tge.material);

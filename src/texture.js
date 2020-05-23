@@ -26,24 +26,24 @@ tge.texture = $extend(function (proto) {
 
         if (this.generateMipmap) {
             this.parameters = {
-                TEXTURE_MAG_FILTER: tge.TEXTURE_FORMAT_TYPE.LINEAR,
-                TEXTURE_MIN_FILTER: tge.TEXTURE_FORMAT_TYPE.LINEAR_MIPMAP_LINEAR,
+                TEXTURE_MAG_FILTER: GL_LINEAR,
+                TEXTURE_MIN_FILTER: GL_LINEAR_MIPMAP_LINEAR,
             };
         }
         else {
             this.parameters = {
-                TEXTURE_MAG_FILTER: tge.TEXTURE_FORMAT_TYPE.NEAREST,
-                TEXTURE_MIN_FILTER: tge.TEXTURE_FORMAT_TYPE.NEAREST,
-                TEXTURE_WRAP_S: tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE,
-                TEXTURE_WRAP_T: tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE,
+                TEXTURE_MAG_FILTER: GL_NEAREST,
+                TEXTURE_MIN_FILTER: GL_NEAREST,
+                TEXTURE_WRAP_S: GL_CLAMP_TO_EDGE,
+                TEXTURE_WRAP_T: GL_CLAMP_TO_EDGE,
             };
         }
-        this.format = format || tge.TEXTURE_FORMAT_TYPE.RGBA;
-        this.formatType = formatType || tge.TEXTURE_FORMAT_TYPE.UNSIGNED_BYTE;
-        this.textureTarget = tge.TEXTURE_PARAMETERS.TEXTURE_2D;
+        this.format = format || GL_RGBA;
+        this.formatType = formatType || GL_UNSIGNED_BYTE;
+        this.textureTarget = GL_TEXTURE_2D;
         if (this.source) this.needsUpdate = true;
 
-
+       
         return (this);
 
 
@@ -59,7 +59,7 @@ tge.texture = $extend(function (proto) {
         return (image);
     };
 
-    var p;
+    var p,i;
     texture.url_texture_cache = {};
     texture.from_url = function (url, noMipmap) {
 
@@ -82,6 +82,37 @@ tge.texture = $extend(function (proto) {
         return (image.texture);
     };
 
+    texture.tempCanvas = $create_canvas(1, 1);
+    texture.cube_map_from_url = function (url, noMipmap) {
+        var image = tge.texture.free_images.fetch();
+        image.texture = new tge.texture(false, false, false, !noMipmap);
+        image.texture.textureTarget = GL_TEXTURE_CUBE_MAP;
+        image.texture.source = [];
+        image.onload = function () {
+            var boxSize = this.height / 3;
+            var boxFixed = 512;
+            var boxes = [[0, 1], [2, 1], [1, 2], [1, 0], [3, 1], [1, 1]];
+            texture.tempCanvas.setSize(boxFixed, boxFixed);
+            texture.tempCanvas.ctx.imageSmoothingEnabled = false;
+            boxes.forEach(function (box) {
+                texture.tempCanvas.ctx.drawImage(image, box[0] * boxSize, box[1] * boxSize, boxSize, boxSize, 0, 0, boxFixed, boxFixed);
+                texture.tempCanvas.ctx.fillText(box[0] + 'x' + box[1], 130, 130);
+                image.texture.source.push(texture.tempCanvas.ctx.getImageData(0, 0, boxFixed, boxFixed));
+            });
+            this.texture.needsUpdate = true;
+            this.onload = null;
+            delete this.texture;
+            tge.texture.free_images.push(this);
+        }
+
+        image.src = url;
+        return (image.texture);
+    };
+    var cubeMapTextureSequence = [
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_X, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+        GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, GL_TEXTURE_CUBE_MAP_POSITIVE_Z
+    ];
     texture.update = function (texture, gl) {
 
 
@@ -104,19 +135,19 @@ tge.texture = $extend(function (proto) {
         gl.bindTexture(texture.textureTarget, texture.webglTexture);
 
 
-        if (texture.textureTarget === gl.TEXTURE_CUBE_MAP) {
-            for (var i = 0; i < texture.source.length; i++) {
+        if (texture.textureTarget === GL_TEXTURE_CUBE_MAP) {
+            for (i = 0; i < texture.source.length; i++) {
                 gl.texImage2D(cubeMapTextureSequence[i], 0, texture.format, texture.format, texture.formatType, texture.source[i]);
             }
         }
         else {
 
             if (source !== null && source.src) {
-                gl.texImage2D(gl.TEXTURE_2D, 0, texture.format, texture.format, texture.formatType, source);
+                gl.texImage2D(GL_TEXTURE_2D, 0, texture.format, texture.format, texture.formatType, source);
             }
 
             else {
-                gl.texImage2D(gl.TEXTURE_2D, 0, texture.format, texture.width, texture.height, 0, texture.format, texture.formatType, source);
+                gl.texImage2D(GL_TEXTURE_2D, 0, texture.format, texture.width, texture.height, 0, texture.format, texture.formatType, source);
             }
         }
 
@@ -142,33 +173,33 @@ tge.framebuffer = $extend(function (proto) {
 
 
     proto.bindTexture = function (texture, attachment) {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.buffer);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, this.buffer);
         if (texture.webglTexture === null) texture.update(this.gl);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, texture.webglTexture);
-        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, attachment, this.gl.TEXTURE_2D, texture.webglTexture, 0);
+        this.gl.bindTexture(GL_TEXTURE_2D, texture.webglTexture);
+        this.gl.framebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, texture.webglTexture, 0);
 
-        var status = this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER);
-        if (status !== this.gl.FRAMEBUFFER_COMPLETE) {
+        var status = this.gl.checkFramebufferStatus(GL_FRAMEBUFFER);
+        if (status !== GL_FRAMEBUFFER_COMPLETE) {
             console.error("frame buffer status:" + status.toString());
         }
 
-        this.gl.bindTexture(this.gl.TEXTURE_2D, null);
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        this.gl.bindTexture(GL_TEXTURE_2D, null);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, null);
 
         return (texture);
     };
 
     proto.unbindTexture = function (attachment) {
-        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, attachment, this.gl.TEXTURE_2D, null, 0);
+        this.gl.framebufferTexture2D(GL_FRAMEBUFFER, attachment, GL_TEXTURE_2D, null, 0);
     };
 
     proto.bind = function () {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.buffer);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, this.buffer);
 
     }
 
     proto.unbind = function () {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, null);
     }
 
     function framebuffer(gl) {
@@ -213,7 +244,7 @@ tge.rendertarget = $extend(function (proto,_super) {
     }
 
     proto.setDepthTexture = function (depthTexture) {
-        this.depthTexture = this.bindTexture(depthTexture, this.gl.DEPTH_ATTACHMENT);
+        this.depthTexture = this.bindTexture(depthTexture, GL_DEPTH_ATTACHMENT);
     }
 
     proto.setViewportPer = function (left, top, right, bottom) {
@@ -236,9 +267,9 @@ tge.rendertarget = $extend(function (proto,_super) {
         return (this)
     };
     proto.bind = function () {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.buffer);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, this.buffer);
         this.applyViewport();
-        if (this.clearBuffer) this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        if (this.clearBuffer) this.gl.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return (this)
     };
 
@@ -247,13 +278,13 @@ tge.rendertarget = $extend(function (proto,_super) {
         return (this)
     };
     proto.bindOnly = function () {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.buffer);
+        this.gl.bindFramebuffer(GL_FRAMEBUFFER, this.buffer);
         this.gl.viewport(this.vpLeft, this.vpTop, this.vpRight - this.vpLeft, this.vpBottom - this.vpTop);
         return (this)
     };
 
     proto.clear = function () {
-        if (this.clearBuffer) this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        if (this.clearBuffer) this.gl.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     }
 
@@ -268,22 +299,22 @@ tge.rendertarget = $extend(function (proto,_super) {
     proto.activateTexture = function (i) {
         if (i < this.textures.length) {
             this.colorTexture = this.textures[i];
-            this.gl.bindTexture(this.gl.TEXTURE_2D, this.colorTexture.webglTexture);
-            this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.colorTexture.webglTexture, 0);
+            this.gl.bindTexture(GL_TEXTURE_2D, this.colorTexture.webglTexture);
+            this.gl.framebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.colorTexture.webglTexture, 0);
 
         }
         return this.colorTexture;
     }
     function rendertarget(gl, width, height, withDepth) {
         _super.apply(this, arguments);
-        this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), this.gl.COLOR_ATTACHMENT0);
+        this.colorTexture = this.bindTexture(new tge.texture(null, false, false, false, width, height), GL_COLOR_ATTACHMENT0);
 
         if (withDepth) {
-            this.depthTexture = this.bindTexture(new tge.texture(null, gl.DEPTH_COMPONENT, tge.TEXTURE_FORMAT_TYPE.UNSIGNED_SHORT ,false, width, height), gl.DEPTH_ATTACHMENT);
+            this.depthTexture = this.bindTexture(new tge.texture(null, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, false, width, height), GL_DEPTH_ATTACHMENT);
             this.depthTexture.targetId = this.uuid;
 
-            this.depthTexture.P("TEXTURE_WRAP_S", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
-            this.depthTexture.P("TEXTURE_WRAP_T", tge.TEXTURE_PARAMETERS.CLAMP_TO_EDGE);
+            this.depthTexture.P("TEXTURE_WRAP_S", GL_CLAMP_TO_EDGE);
+            this.depthTexture.P("TEXTURE_WRAP_T", GL_CLAMP_TO_EDGE);
 
         }
         this.textures = [this.colorTexture];

@@ -6,18 +6,15 @@ tge.post_process = $extend(function (proto) {
         this.uuid = $guidi();
         this.shader = shader || tge.post_process.shader;
         this.enabled = true;
-        this.on_apply = on_apply || null;
+       
     }
-
-    
-
-
+      
     proto.resize = function (width, height) {
 
     }
     proto.bind_output = function (engine,output) {
         if (output === null) {
-            engine.gl.bindFramebuffer(engine.gl.FRAMEBUFFER, null);
+            engine.gl.bindFramebuffer(GL_FRAMEBUFFER, null);
             engine.gl.viewport(0, 0, engine.gl.canvas.width, engine.gl.canvas.height);
         }
         else {
@@ -48,29 +45,6 @@ tge.post_process = $extend(function (proto) {
 });
 
 
-tge.post_process.fxaa = $extend(function (proto,_super) {
-    function fxaa(fxaaSpanMax, fxaaReduceMin,fxaaReduceMul) {
-        _super.apply(this);        
-        this.shader = tge.post_process.shader.extend(import('post_process_fxaa.glsl'));
-        this.tge_u_fxaa_params = tge.vec3(
-            fxaaSpanMax || 8,
-            fxaaReduceMin || (1 / 256),
-            fxaaReduceMul || (1 / 8)
-        );
-
-
-        this.tge_u_inverseFilterTextureSize = tge.vec3();
-        this.on_apply = function (engine, input, output) {
-            this.tge_u_inverseFilterTextureSize[0] = 1 / input.width;
-            this.tge_u_inverseFilterTextureSize[1] = 1 / input.height;
-            this.shader.setUniform("tge_u_inverseFilterTextureSize", this.tge_u_inverseFilterTextureSize);
-            this.shader.setUniform("tge_u_fxaa_params", this.tge_u_fxaa_params);
-            return input;
-        };
-    }
-    return fxaa;
-
-}, tge.post_process);
 
 
 
@@ -78,7 +52,7 @@ tge.post_process.shader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('
 tge.post_process.flat = function (engine, input, output) {
     engine.useShader(tge.post_process.shader);
     if (output === null) {
-        engine.gl.bindFramebuffer(engine.gl.FRAMEBUFFER, null);
+        engine.gl.bindFramebuffer(GL_FRAMEBUFFER, null);
         engine.gl.viewport(0, 0, engine.gl.canvas.width, engine.gl.canvas.height);
     }
     else {
@@ -92,165 +66,82 @@ tge.post_process.flat = function (engine, input, output) {
 }
 
 
-tge.post_process.picture_adjustment = $extend(function (proto, _super) {
-    function picture_adjustment(gamma, contrast, saturation, brightness, red, green, blue, alpha) {
+tge.post_process.fxaa = $extend(function (proto, _super) {
+    function fxaa(params) {
         _super.apply(this);
-        this.shader = tge.post_process.shader.extend(import('post_process_pa.glsl'));
 
-        this.params = tge.mat3(
-            gamma || 1,
-            contrast || 1,
-            saturation || 1,
-            brightness || 1,
-            red || 1,
-            green || 1,
-            blue || 1,
-            alpha || 1
-        );
 
-        this.on_apply = function (engine, input, output) {
-            this.shader.setUniform("tge_u_pa_params", this.params);
-            return input;
-        };
+
+        this.spanMax = 8;
+        this.reduceMin = (1 / 256);
+        this.reduceMul = (1 / 8);
+
+        $merge(params || {}, this);
+
+        this.shader = tge.post_process.fxaa.shader;
+
+
     }
+
+    var tge_u_inverseFilterTextureSize = tge.vec3();
+    var tge_u_fxaa_params = tge.vec3();
+    proto.on_apply = function (engine, input, output) {
+        tge_u_inverseFilterTextureSize[0] = 1 / input.width;
+        tge_u_inverseFilterTextureSize[1] = 1 / input.height;
+        this.shader.setUniform("tge_u_inverseFilterTextureSize", tge_u_inverseFilterTextureSize);
+
+        tge_u_fxaa_params[0] = this.spanMax;
+        tge_u_fxaa_params[1] = this.reduceMin;
+        tge_u_fxaa_params[2] = this.reduceMul;
+
+
+        this.shader.setUniform("tge_u_fxaa_params", tge_u_fxaa_params);
+        return input;
+    };
+
+    fxaa.shader = tge.post_process.shader.extend(import('post_process_fxaa.glsl'));
+
+
+    return fxaa;
+
+}, tge.post_process);
+
+
+tge.post_process.picture_adjustment = $extend(function (proto, _super) {
+    function picture_adjustment(params) {
+        params = params || {};
+        _super.apply(this);
+        this.shader = tge.post_process.picture_adjustment.shader;      
+        this.gamma=1;
+        this.contrast= 1;
+        this.saturation= 1;
+        this.brightness= 1;
+        this.red= 1;
+        this.green= 1;
+        this.blue =1;
+        this.alpha = 1;
+        $merge(params, this);
+
+    }
+    picture_adjustment.shader = tge.post_process.shader.extend(import('post_process_pa.glsl'));
+
+    var tge_u_pa_params = tge.mat3();
+    proto.on_apply = function (engine, input, output) {
+        tge_u_pa_params[0] = this.gamma;
+        tge_u_pa_params[1] = this.contrast;
+        tge_u_pa_params[2] = this.saturation;
+        tge_u_pa_params[3] = this.brightness;
+        tge_u_pa_params[4] = this.red;
+        tge_u_pa_params[5] = this.green;
+        tge_u_pa_params[6] = this.blue;
+        tge_u_pa_params[7] = this.alpha;
+        this.shader.setUniform("tge_u_pa_params", tge_u_pa_params);
+        return input;
+    };
+
     return picture_adjustment;
 
 }, tge.post_process);
-
-
-
-tge.post_process.radial_blur = $extend(function (proto, _super) {
-
-   
-
-    function radial_blur(centerX,centerY,angle,radius,kernelSize) {
-        _super.apply(this);
-        this.shader = tge.post_process.shader.extend(import('post_process_radial_blur.glsl'));
-
-
-        this.centerX =centerX || 0.5;
-        this.centerY = centerY || 0.5;
-        this.angle = angle || 3;
-        this.radius = radius || -1;
-        this.kernelSize = kernelSize || 10;
-
-        this.params = tge.mat3();                     
-
-        this.on_apply = function (engine, input, output) {
-            this.params[0] = input.width;
-            this.params[1] = input.height;
-            this.params[4] = this.centerX * input.width;
-            this.params[5] = this.centerY * input.height;
-            this.params[6] = this.angle * tge.DEGTORAD;
-            this.params[7] = this.radius;
-            this.params[8] = this.kernelSize;
-
-            this.shader.setUniform("tge_u_blur_params", this.params);
-            return input;
-        };
-    }
-    return radial_blur;
-
-}, tge.post_process);
-
-
-
-tge.post_process.motion_blur = $extend(function (proto, _super) {
-
-
-
-    function motion_blur(velX, velY, offset, kernelSize) {
-        _super.apply(this);
-        this.shader = tge.post_process.shader.extend(import('post_process_motion_blur.glsl'));
-
-
-        this.velX = velX || 14;
-        this.velY = velY || 14;
-        
-        this.offset = offset || 0;
-        this.kernelSize = kernelSize || 50;
-
-        this.params = tge.mat3();
-
-        this.on_apply = function (engine, input, output) {
-            this.params[0] = input.width;
-            this.params[1] = input.height;
-            this.params[4] = this.velX;
-            this.params[5] = this.velY;
-         
-            this.params[7] = this.offset;
-            this.params[8] = this.kernelSize;
-
-            this.shader.setUniform("tge_u_blur_params", this.params);
-            return input;
-        };
-    }
-    return motion_blur;
-
-}, tge.post_process);
-
-
-tge.post_process.kawase_blur = $extend(function (proto, _super) {
-
-    function kawase_blur() {
-        _super.apply(this);
-      
-        this.quality = 3;
-        this.kernels = [0, 1, 2, 2, 3];
-        this.mb = new tge.post_process.motion_blur();
-    }
-
-    proto.set_kernels = function () {
-
-    }
-
-    proto.apply = function (engine, input, output) {
-        if (!this.targets) {
-            this.targets = [new tge.rendertarget(engine.gl,
-                input.width * 0.5, input.height * 0.5),
-                new tge.rendertarget(engine.gl,
-                    input.width * 0.5, input.height * 0.5)
-            ];
-
-            this.blur_offset = tge.vec2();
-
-        }
-        engine.gl.disable(engine.gl.DEPTH_TEST);        
-        tge.post_process.flat(engine, input, this.targets[0]);
-      
-        var t = 0, off;
-        var uvX = 1 / input.width;
-        var uvY = 1 / input.height;
-              
-
-        engine.useShader(tge.post_process.kawase_blur.shader);
-        for (var i = 1; i < this.kernels.length; i++) {
-            t = i % 2;
-            this.targets[t].bind();
-            engine.useTexture(this.targets[(t === 0 ? 1 : 0)].colorTexture, 0);
-            off = this.kernels[i] + 0.5;
-            this.blur_offset[0] = off * uvX;
-            this.blur_offset[1] = off * uvY;
-            engine.activeShader.setUniform("tge_u_offset", this.blur_offset);
-            
-            engine.renderFullScreenQuad();
-        }
-
-        tge.post_process.flat(engine, this.targets[t].colorTexture, output);
-
-        engine.gl.enable(engine.gl.DEPTH_TEST);
-
-
-    };
-
-    kawase_blur.shader = tge.post_process.shader.extend(import('post_process_kawase_blur.glsl'));
-
-    console.log("kawase_blur.shader", kawase_blur.shader);
-
-    return kawase_blur;
-   
-}, tge.post_process);
-
 
 
 
@@ -271,6 +162,9 @@ tge.post_process.glow = $extend(function (proto, _super) {
         this.blendFactor = params.blendFactor || 3.0;
         this.tge_u_offset = tge.vec2();
         this.blurKernel = tge.vec3([5.0 / 16.0, 6 / 16.0, 5 / 16.0]);
+
+        if (params.enabled !== undefined) this.enabled = params.enabled;
+
         
     }
 
@@ -298,6 +192,13 @@ tge.post_process.glow = $extend(function (proto, _super) {
                 input.width * this.resolution, input.height * this.resolution),
             new tge.rendertarget(engine.gl,
                 input.width * this.resolution, input.height * this.resolution)];
+
+            this.targets[0].colorTexture.P("TEXTURE_MAG_FILTER", GL_LINEAR)
+                .P("TEXTURE_MIN_FILTER", GL_LINEAR);
+
+            this.targets[1].colorTexture.P("TEXTURE_MAG_FILTER", GL_LINEAR)
+                .P("TEXTURE_MIN_FILTER", GL_LINEAR);
+
         }
 
         else {
@@ -352,34 +253,7 @@ tge.post_process.glow = $extend(function (proto, _super) {
 
     }
 
-    proto.apply2 = function (engine, input, output) {
 
-        if (!this.emission_map) {
-           this.emission_map=new tge.rendertarget(engine.gl,
-               engine.gl.canvas.width * 1, engine.gl.canvas.height * 1)
-
-
-        }
-        engine.gl.disable(engine.gl.DEPTH_TEST);
-        engine.useShader(tge.post_process.glow.emission_shader);
-        this.emission_map.bind();        
-        engine.useTexture(input, 0);
-        engine.renderFullScreenQuad();
-
-
-        this.blur.apply(engine, this.emission_map.colorTexture, this.emission_map);
-
-        this.bind_output(engine, output);
-        engine.useShader(tge.post_process.glow.merge_shader);
-        engine.activeShader.setUniform("tge_u_glow_emission", 1)
-        engine.useTexture(input, 0);
-        engine.useTexture(this.emission_map.colorTexture, 1);
-
-        engine.renderFullScreenQuad();
-
-
-        engine.gl.enable(engine.gl.DEPTH_TEST);
-    }
 
 
     return glow;

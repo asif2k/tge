@@ -1,3 +1,4 @@
+import * from './gl_constants.js'
 import * from './shader.js'
 import * from './model.js'
 import * from './camera.js'
@@ -168,9 +169,9 @@ tge.engine = $extend(function (proto) {
 
         this.tge_u_pipelineParams = tge.vec4();
         
-        gl.enable(gl.DEPTH_TEST);
-        gl.cullFace(gl.BACK);
-        gl.enable(gl.CULL_FACE);
+        gl.enable(GL_DEPTH_TEST);
+        gl.cullFace(GL_BACK);
+        gl.enable(GL_CULL_FACE);
         gl.clearColor(0, 0, 0, 1);
 
 
@@ -197,15 +198,12 @@ tge.engine = $extend(function (proto) {
 
 
     proto.clearScreen = function () {
-        this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+        this.gl.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return (this);
     };
 
     proto.setDefaultViewport = function () {
         this.defaultRenderTarget.bind();
-       // this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      //  this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-        this.lastRenderTargetId = -1;
         return (this)
     };
 
@@ -248,14 +246,14 @@ tge.engine = $extend(function (proto) {
                         att.dest = gl.createBuffer();
 
                     }
-                    gl.bindBuffer(gl.ARRAY_BUFFER, att.dest);
-                    gl.bufferData(gl.ARRAY_BUFFER, att.data, att.bufferType);
+                    gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
+                    gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);
                    
                     returnValue = 1;
                     att.needsUpdate = false;
                 }
                 else if (att.dest !== null) {
-                    gl.bindBuffer(gl.ARRAY_BUFFER, att.dest);
+                    gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
 
 
                 }
@@ -288,9 +286,9 @@ tge.engine = $extend(function (proto) {
 
 
             if (geo.indexData !== null) {
-                this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                this.gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
                 if (geo.indexNeedsUpdate) {
-                    this.gl.bufferData(this.gl.ELEMENT_ARRAY_BUFFER, geo.indexData, this.gl.DYNAMIC_DRAW);
+                    this.gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
                     geo.indexNeedsUpdate = false;
                 }
             }
@@ -316,7 +314,7 @@ tge.engine = $extend(function (proto) {
         }
         if (this.textureSlots[slot] !== texture.uuid) {
             this.textureSlots[slot] = texture.uuid;
-            this.gl.activeTexture(this.gl.TEXTURE0 + slot);
+            this.gl.activeTexture(GL_TEXTURE0 + slot);
             this.gl.bindTexture(texture.textureTarget, texture.webglTexture);
         }
 
@@ -334,20 +332,20 @@ tge.engine = $extend(function (proto) {
     })();
 
     proto.enableFWRendering = function () {
-        this.gl.blendFunc(this.gl.ONE, this.gl.ONE);
+        this.gl.blendFunc(GL_ONE, GL_ONE);
 
         if (this.FWRenderingMode) return;
        
-        this.gl.enable(this.gl.BLEND);
+        this.gl.enable(GL_BLEND);
 
         this.gl.depthMask(false);
-        this.gl.depthFunc(this.gl.EQUAL);
+        this.gl.depthFunc(GL_EQUAL);
         this.FWRenderingMode = true;
     };
 
     proto.disableFWRendering = function () {
-        this.gl.disable(this.gl.BLEND);
-        this.gl.depthFunc(this.gl.LESS);
+        this.gl.disable(GL_BLEND);
+        this.gl.depthFunc(GL_LESS);
         this.gl.depthMask(true);
         this.FWRenderingMode = false;
     };      
@@ -474,7 +472,7 @@ tge.engine = $extend(function (proto) {
             if (this.isError) {
                 return;
             }
-            currentCamera = camera;
+            this.currentCamera = camera;
 
 
 
@@ -597,7 +595,7 @@ tge.engine = $extend(function (proto) {
 
 
 
-            _this.gl.enable(_this.gl.CULL_FACE);
+            _this.gl.enable(GL_CULL_FACE);
         
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];
@@ -612,19 +610,16 @@ tge.engine = $extend(function (proto) {
                             _this.updateCameraUniforms(camera);
                             _this.updateShadingLights(camera);
                             if (_this.lightPassCount === 0) {
-                                _this.gl.enable(_this.gl.BLEND);
-                                _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
-                                _this.gl.cullFace(_this.gl.FRONT);
+                                _this.gl.enable(GL_BLEND);
+                                _this.gl.blendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+                                _this.gl.cullFace(GL_FRONT);
                                 _this.renderMesh(mesh);
-                                _this.gl.cullFace(_this.gl.BACK);
+                                _this.gl.cullFace(GL_BACK);
                                 _this.renderMesh(mesh);
                             }
                             else {
 
-                               _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE);
-                               // _this.gl.cullFace(_this.gl.FRONT);
-                               // _this.renderMesh(mesh);
-                               // _this.gl.cullFace(_this.gl.BACK);
+                                _this.gl.blendFunc(GL_SRC_ALPHA, GL_ONE);
                                 _this.renderMesh(mesh);
                             }
                         }
@@ -638,8 +633,8 @@ tge.engine = $extend(function (proto) {
                         _this.updateCameraUniforms(camera);
                     }
                     _this.updateModelViewMatrix(camera, mesh.model);
-                    _this.gl.enable(_this.gl.BLEND);
-                    _this.gl.blendFunc(_this.gl.SRC_ALPHA, _this.gl.ONE_MINUS_SRC_ALPHA);
+                    _this.gl.enable(GL_BLEND);
+                    _this.gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     _this.renderMesh(mesh);
 
                 }
@@ -651,7 +646,7 @@ tge.engine = $extend(function (proto) {
 
             post_process_input = _this._defaultRenderTarget.colorTexture;
             i1 = 0;
-            _this.gl.disable(_this.gl.DEPTH_TEST);
+            _this.gl.disable(GL_DEPTH_TEST);
             for (i4 = 0; i4 < _this.post_processes.length; i4++) {
                 post_process = _this.post_processes[i4];
                 if (post_process.enabled) {
@@ -667,7 +662,7 @@ tge.engine = $extend(function (proto) {
                     i1++;
                 }
             }
-            _this.gl.enable(_this.gl.DEPTH_TEST);
+            _this.gl.enable(GL_DEPTH_TEST);
                         
             tge.post_process.flat(_this, post_process_input, null);
             _this.textureSlots[0] = -1;
@@ -689,40 +684,9 @@ tge.engine = $extend(function (proto) {
 
     };
 
-    proto.renderPostProcessQuad = (function () {
-        var shader;
-        return function (shader, target, texture_input) {
-
-            if (target == null) {
-                this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-                this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-            }
-            else {
-                target.bind();
-            }
 
 
-            if (this.lastShaderId !== shader.uuid) this.useShader(shader);
-            this.useGeometry(fq);
-            shader.setUniform("tge_u_texture_input", 0);
-            this.useTexture(texture_input, 0);
-            this.gl.drawArrays(4, 0, 6);
-        }
-    })();
-    proto.renderFlatMeshes = function (camera, meshes) {
 
-
-        for (i4 = 0; i4 < meshes.length; i4++) {
-            mesh = meshes[i4];
-            if (this.useShader(mesh.material.getShader())) {
-                this.updateCameraUniforms(camera);
-            }
-            this.updateModelViewMatrix(camera, mesh.model);
-            this.renderMesh(mesh);
-
-        }
-
-    };
 
     proto.renderSingleMesh = function (camera, mesh) {
         this.useMaterial(mesh.material, mesh.material.shader);
@@ -731,13 +695,7 @@ tge.engine = $extend(function (proto) {
         this.renderMesh(mesh);
     }
 
-    proto.bindRenderTarget = function (target) {
-        if (target.uuid !== this.lastRenderTargetId) {
-            this.lastRenderTargetId = target.uuid;
-            target.bind();
 
-        }
-    };
 
 
     return engine;

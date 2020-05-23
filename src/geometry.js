@@ -112,13 +112,13 @@ tge.geometry = $extend(function (proto) {
             att.offset = att.offset || 0;
             att.needsUpdate = att.needsUpdate || false;
             att.array = att.array || null;
-            att.dataType = att.dataType || tge.BUFFER_DATATYPES.FLOAT;
-            att.bufferType = att.bufferType || tge.BUFFER_DRAWTYPES.STATIC_DRAW;
+            att.dataType = att.dataType || GL_FLOAT;
+            att.bufferType = att.bufferType || GL_STATIC_DRAW;
 
             if (att.data) {
                 if (!att.dest) att.dest = gl.createBuffer();
-                gl.bindBuffer(gl.ARRAY_BUFFER, att.dest);
-                gl.bufferData(gl.ARRAY_BUFFER, att.data, att.bufferType);
+                gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
+                gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);
             }
             return (att);
         }
@@ -129,7 +129,7 @@ tge.geometry = $extend(function (proto) {
 
 
         geometry.tge_a_color = {
-            dataType: tge.BUFFER_DATATYPES.FLOAT,
+            dataType: GL_FLOAT,
             itemSize: 4, stride: 0, offset: 0, divisor: 0, array: null,
             data: new Float32Array(60000)
         };
@@ -151,8 +151,8 @@ tge.geometry = $extend(function (proto) {
 
             if (geo.indexData) {
                 if (!geo.indexBuffer) geo.indexBuffer = gl.createBuffer();
-                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
-                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geo.indexData, gl.DYNAMIC_DRAW);
+                gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
             }
 
 
@@ -366,6 +366,25 @@ tge.geometry = $extend(function (proto) {
         });
         g.numItems =4;        
         g.geoType = "quad2D";
+        return (g);
+    };
+
+    geometry.skybox = function () {
+        var g = new geometry();
+        g.addAttribute("tge_a_position", {
+            data: new Float32Array([
+                -1, -1,
+                1, -1,
+                -1, 1,
+                -1, 1,
+                1, -1,
+                1, 1,
+
+            ]),
+            itemSize: 2, offset: 0
+        });
+        g.numItems = g.attributes['tge_a_position'].data.length/2;
+        g.geoType = "skybox";
         return (g);
     };
 

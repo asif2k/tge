@@ -202,7 +202,31 @@ $mergesort = (function (array, comparefn) {
     return merge_sort;
 })();
 
+
+function $create_canvas(w, h) {
+    var temp_canvas = document.createElement('canvas');
+    temp_canvas.ctx = temp_canvas.getContext('2d');
+    temp_canvas.width = w;
+    temp_canvas.height = h;
+    temp_canvas.setSize = function (ww, hh) {
+        this.width = ww;
+        this.height = hh;
+    };
+    temp_canvas._getImageData = function () {
+        this.imd = this.ctx.getImageData(0, 0, this.width, this.height);
+        return this.imd;
+    };
+
+    temp_canvas._putImageData = function () {
+        this.ctx.putImageData(this.imd, 0, 0);
+    };
+
+    return (temp_canvas);
+}
+
 var tge = {};
+
+
 
 $assign(tge, {
     ATTRIBUTES: {
@@ -211,47 +235,6 @@ $assign(tge, {
         UVS: 8,
         COLORS: 16,
         TANGENTS: 32
-    },
-    DRAW_TYPES: {
-        TRIANGLES: 4,
-        TRIANGLE_FAN: 6,
-        TRIANGLE_STRIP: 5,
-        LINES: 1,
-        LINE_LOOP: 2,
-        LINE_STRIP: 3,
-        POINTS: 0
-    },
-    BUFFER_DRAWTYPES: {
-        STATIC_DRAW: 35044,
-        DYNAMIC_DRAW: 35048
-    },
-
-    BUFFER_DATATYPES: {
-        FLOAT: 5126,
-        INT: 5124,
-        UNSIGNED_BYTE: 5121,
-        UNSIGNED_INT: 5125,
-        UNSIGNED_SHORT: 5123,
-        UNSIGNED_SHORT_4_4_4_4: 32819,
-        UNSIGNED_SHORT_5_5_5_1: 32820,
-        UNSIGNED_SHORT_5_6_5: 33635,
-    },
-    BLEND_FUNC: {
-        ZERO: 0,
-        ONE: 1,
-        SRC_COLOR: 768,
-        ONE_MINUS_SRC_COLOR: 769,
-        DST_COLOR: 774,
-        ONE_MINUS_DST_COLOR: 775,
-        SRC_ALPHA: 770,
-        DST_ALPHA: 772,
-        ONE_MINUS_DST_ALPHA: 773,
-        CONSTANT_COLOR: 32769,
-        ONE_MINUS_CONSTANT_COLOR: 32770,
-        CONSTANT_ALPHA: 32771,
-        ONE_MINUS_CONSTANT_ALPHA: 32772,
-        SRC_ALPHA_SATURATE: 776,
-        ONE_MINUS_SRC_ALPHA: 771
     },
     TEXTURE_PARAMETERS: {
         TEXTURE_2D: 3553,
@@ -274,37 +257,6 @@ $assign(tge, {
         NEAREST_MIPMAP_LINEAR: 9986,
         NEAREST_MIPMAP_NEAREST: 9984,
         CLAMP_TO_EDGE: 33071,
-        LINEAR_MIPMAP_LINEAR: 9987,
-        LINEAR_MIPMAP_NEAREST: 9985,
-    },
-
-
-    TEXTURE_FORMAT_TYPE: {
-        ALPHA: 6406,
-        RGB: 6407,
-        RGB5_A1: 32855,
-        RGB565: 36194,
-        RGBA: 6408,
-        RGBA4: 32854,
-        LUMINANCE: 6409,
-        LUMINANCE_ALPHA: 6410,
-        DEPTH_COMPONENT: 6402,
-        DEPTH_COMPONENT16: 33189,
-        UNSIGNED_BYTE: 5121,
-        UNSIGNED_INT: 5125,
-        UNSIGNED_SHORT: 5123,
-        UNSIGNED_SHORT_4_4_4_4: 32819,
-        UNSIGNED_SHORT_5_5_5_1: 32820,
-        UNSIGNED_SHORT_5_6_5: 33635,
-        VALIDATE_STATUS: 35715,
-
-        DEPTH_ATTACHMENT: 36096,
-        COLOR_ATTACHMENT0: 36064,
-
-        NEAREST: 9728,
-        NEAREST_MIPMAP_LINEAR: 9986,
-        NEAREST_MIPMAP_NEAREST: 9984,
-        LINEAR: 9729,
         LINEAR_MIPMAP_LINEAR: 9987,
         LINEAR_MIPMAP_NEAREST: 9985,
     },

@@ -77,7 +77,7 @@ tge.light = $extend(function (proto, _super) {
         this.range = 2000;
         this.lightType = 0;
         this.shadowBias = 0.000001;
-        this.shadowOpacity = 0.5;
+        this.shadowOpacity = 0.85;
         this.shadowCameraDistance = 20;
         this.shadowFlipFaces = true;
         this.castShadows = false;
@@ -288,15 +288,15 @@ tge.light = $extend(function (proto, _super) {
             shadow_map.bind();
 
 
-            engine.gl.cullFace(engine.gl.FRONT);
+            engine.gl.cullFace(GL_FRONT);
             totalShadowCasters=renderShadowCasters(engine, light, light_camera, opuqueMeshes);
             if (transparentMeshes.length > 0) {
-                engine.gl.enable(engine.gl.BLEND);
-                engine.gl.blendFunc(engine.gl.SRC_ALPHA, engine.gl.ONE_MINUS_SRC_ALPHA);
+                engine.gl.enable(GL_BLEND);
+                engine.gl.blendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 totalShadowCasters=+renderShadowCasters(engine, light, light_camera, transparentMeshes);
             }
             
-            engine.gl.cullFace(engine.gl.BACK);
+            engine.gl.cullFace(GL_BACK);
 
 
             engine.setDefaultViewport();
@@ -310,15 +310,15 @@ tge.light = $extend(function (proto, _super) {
 
             if (totalShadowCasters > 0) {
                 engine.enableFWRendering();
-                engine.gl.blendEquation(engine.gl.FUNC_REVERSE_SUBTRACT);
+                engine.gl.blendEquation(GL_FUNC_REVERSE_SUBTRACT);
                 engine.useTexture(shadow_map.depthTexture, 1);
                 engine.useTexture(shadow_map.colorTexture, 2);
                 renderShadowReceivers(engine, light, light_camera, camera, opuqueMeshes);
                 if (transparentMeshes.length > 0) {
-                    engine.gl.depthFunc(engine.gl.LESS);
+                    engine.gl.depthFunc(GL_LESS);
                     renderShadowReceivers(engine, light, light_camera, camera, transparentMeshes);
                 }
-                engine.gl.blendEquation(engine.gl.FUNC_ADD);
+                engine.gl.blendEquation(GL_FUNC_ADD);
                 engine.disableFWRendering();
             }
             

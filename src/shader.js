@@ -56,7 +56,7 @@ tge.shader = $extend(function (proto) {
             var source = gl.getShaderSource(shdr);
 
             gl.compileShader(shdr);
-            if (!gl.getShaderParameter(shdr, gl.COMPILE_STATUS)) {
+            if (!gl.getShaderParameter(shdr, GL_COMPILE_STATUS)) {
                 console.log('source', source);
                 console.error("Error compiling shader : ", gl.getShaderInfoLog(shdr));
                 console.log(src);
@@ -74,13 +74,13 @@ tge.shader = $extend(function (proto) {
             gl.attachShader(prog, fshdr);
 
             gl.linkProgram(prog);
-            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+            if (!gl.getProgramParameter(prog, GL_LINK_STATUS)) {
                 console.error("Error creating shader program.", gl.getProgramInfoLog(prog));
                 gl.deleteProgram(prog); return null;
             }
             if (doValidate) {
                 gl.validateProgram(prog);
-                if (!gl.getProgramParameter(prog, gl.VALIDATE_STATUS)) {
+                if (!gl.getProgramParameter(prog, GL_VALIDATE_STATUS)) {
                     console.error("Error validating program", gl.getProgramInfoLog(prog));
                     gl.deleteProgram(prog); return null;
                 }
@@ -102,14 +102,18 @@ tge.shader = $extend(function (proto) {
                 35665: ['uniform3fv', 2], //'vec3',
                 35666: ['uniform4fv', 2], //'vec4',
                 35678: ['uniform1i', 2], //'sampler2D',
+                35680: ['uniform1i', 2], //'samplerCube',
                 35675: ['uniformMatrix3fv', 3], //'mat3',
                 35676: ['uniformMatrix4fv', 3],//'mat4'
+
+
             }
 
             function addUniformToShader(gl, shdr, name, type) {
 
                 
                 var location = gl.getUniformLocation(shdr.program, name);
+                
                 var func = uniformsWriteFunc[type];
                 var uni = {};
                 if (func[1] === 3)
@@ -125,7 +129,7 @@ tge.shader = $extend(function (proto) {
             return function (gl, shdr) {
                 var i = 0, a = 0, info;
                 shdr.uniforms = {};
-                for (i = 0; i < gl.getProgramParameter(shdr.program, gl.ACTIVE_UNIFORMS); i++) {
+                for (i = 0; i < gl.getProgramParameter(shdr.program, GL_ACTIVE_UNIFORMS); i++) {
                     info = gl.getActiveUniform(shdr.program, i);
                    
                     if (info.size > 1) {
@@ -139,7 +143,7 @@ tge.shader = $extend(function (proto) {
                 }
 
                 shdr.attributes = {};
-                for (i = 0; i < gl.getProgramParameter(shdr.program, gl.ACTIVE_ATTRIBUTES); i++) {
+                for (i = 0; i < gl.getProgramParameter(shdr.program, GL_ACTIVE_ATTRIBUTES); i++) {
                     info = gl.getActiveAttrib(shdr.program, i);
                     shdr.attributes[info.name] = { name: info.name, location: gl.getAttribLocation(shdr.program, info.name) };
                 }
@@ -165,9 +169,9 @@ tge.shader = $extend(function (proto) {
 
 
             var vshdr, fshdr;
-            vshdr = createShader(gl, shdr.vs, gl.VERTEX_SHADER);
+            vshdr = createShader(gl, shdr.vs, GL_VERTEX_SHADER);
             if (!vshdr) return false;
-            fshdr = createShader(gl, shdr.fs, gl.FRAGMENT_SHADER);
+            fshdr = createShader(gl, shdr.fs, GL_FRAGMENT_SHADER);
             if (!fshdr) { gl.deleteShader(vshdr); return false; }
             shdr.program = createProgram(gl, vshdr, fshdr, true);
 
