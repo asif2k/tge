@@ -42,9 +42,12 @@
         });
       });
 
-      scene.addModel(new tge.model(tge.geometry.skybox(), new tge.skybox_material()), function (md, mesh) {
+      var sunPosition
+      scene.addModel(new tge.model(tge.geometry.skybox(), new tge.dynamic_skybox_material()), function (md, mesh) {
         console.log("mesh", mesh);
-        mesh.material.ambientTexture = tge.texture.cube_map_from_url('textures/skybox3.jpg')
+        // mesh.material.ambientTexture = tge.texture.cube_map_from_url('textures/skybox3.jpg');
+        
+        sunPosition = mesh.material.sunPosition;
 
       });
 
@@ -95,7 +98,7 @@
       app.mouseDrage2 = (function (base) {
         return function (dx, dy, e) {
           if (!e.ctrlKey) return base.apply(this, arguments);
-          else light0.yawPitch(-dy * 0.005, -dx * 0.005);
+          else light0.yawPitch(-dy * 0.001, -dx * 0.001);
         }
       })(app.mouseDrage2);
 
@@ -119,7 +122,7 @@
           resolution: 0.25,
           blendFactor:1.5,
           blendGamma: 1,
-          brightThreshold: [0.2627, 0.6780, 0.0593, -0.75],
+          brightThreshold: [0.2627, 0.6780, 0.0593, -0.65],
           enabled:true
         }),
         new tge.post_process.fxaa(),
@@ -132,6 +135,10 @@
       app.playLoop(function (delta, time) {
         if (light0.version < 3) light0.version++;
 
+
+        sunPosition[0] = light0.fwVector[0];
+        sunPosition[1] = light0.fwVector[1];
+        sunPosition[2] = light0.fwVector[2];
 
         if (camera.update()) {
           scene.renderList.meshes.sorted = false;

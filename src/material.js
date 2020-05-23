@@ -284,10 +284,13 @@ tge.skybox_material = $extend(function (proto, _super) {
         options = options || {};
         _super.apply(this, arguments);
         this.shader = tge.skybox_material.shader;
-
+        this.ambientTexture = tge.skybox_material.dummy;
+        this.skytop_color = tge.vec4(0.0, 0.0, 1.0, 1.0);
+        this.skyhorizon_color = tge.vec4(0.3294, 0.92157, 1.0, 1.0);
         return (this);
 
     }
+    skybox_material.dummy = tge.texture.dummy_cube_map();
     var viewDirectionProjectionMatrix = tge.mat4();
     var viewDirectionProjectionInverseMatrix  = tge.mat4();
     proto.renderMesh = function (engine, shader, mesh) {
@@ -309,14 +312,66 @@ tge.skybox_material = $extend(function (proto, _super) {
         }
 
         
-        shader.setUniform("viewDirectionProjectionInverseMatrix", viewDirectionProjectionInverseMatrix);
+        shader.setUniform("tge_u_viewProjectionMatrix", viewDirectionProjectionInverseMatrix);
+        shader.setUniform("tge_u_skytop_color", this.skytop_color);
+        shader.setUniform("tge_u_skyhorizon_color", this.skyhorizon_color);
         engine.useTexture(this.ambientTexture, 0);
         engine.gl.depthFunc(GL_LEQUAL);
+
 
         engine.gl.drawArrays(this.drawType, 0, mesh.geo.numItems);
     };
     skybox_material.shader = tge.pipleline_shader.parse(import('skybox_material.glsl'));
 
     return skybox_material;
+
+}, tge.material);
+
+
+
+
+tge.dynamic_skybox_material = $extend(function (proto, _super) {
+
+    function dynamic_skybox_material(options) {
+        options = options || {};
+        _super.apply(this, arguments);
+        this.shader = tge.dynamic_skybox_material.shader;
+        this.sunPosition = tge.vec4(0.0, 1.0, 0.0);
+        this.sunAngularDiameterCos = 0.99991;
+        
+        return (this);
+
+    }
+
+    var viewDirectionProjectionMatrix = tge.mat4();
+    var viewDirectionProjectionInverseMatrix = tge.mat4();
+    proto.renderMesh = function (engine, shader, mesh) {
+
+
+        if (mesh.skyboxCameraVersion !== engine.currentCamera.version) {
+            engine.currentCamera.matrixWorldInvserse[12] = 0;
+            engine.currentCamera.matrixWorldInvserse[13] = 0;
+            engine.currentCamera.matrixWorldInvserse[14] = 0;
+
+            tge.mat4.multiply(viewDirectionProjectionMatrix, engine.currentCamera.matrixProjection,
+                engine.currentCamera.matrixWorldInvserse
+            );
+
+            tge.mat4.invert(viewDirectionProjectionInverseMatrix, viewDirectionProjectionMatrix);
+            mesh.skyboxCameraVersion = engine.currentCamera.version;
+        }
+
+        this.sunPosition[3] = this.sunAngularDiameterCos;
+
+        shader.setUniform("tge_u_viewProjectionMatrix", viewDirectionProjectionInverseMatrix);
+        shader.setUniform("sun_params", this.sunPosition);
+        engine.gl.depthFunc(GL_LEQUAL);
+
+
+        engine.gl.drawArrays(this.drawType, 0, mesh.geo.numItems);
+    };
+    dynamic_skybox_material.shader = tge.pipleline_shader.parse(import('skybox_dynamic_material.glsl'));
+
+    return dynamic_skybox_material;
 
 }, tge.material);

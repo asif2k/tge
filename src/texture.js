@@ -108,6 +108,23 @@ tge.texture = $extend(function (proto) {
         image.src = url;
         return (image.texture);
     };
+
+    texture.dummy_cube_map = function () {
+        var texture = new tge.texture(false, false, false, false);
+        texture.textureTarget = GL_TEXTURE_CUBE_MAP;
+        texture.source = [];
+        tge.texture.tempCanvas.setSize(1, 1);
+        tge.texture.tempCanvas.ctx.fillStyle = "#ffffff";
+        tge.texture.tempCanvas.ctx.fillRect(0, 0, 1, 1);
+
+        for (var i = 0; i < 6; i++)
+            texture.source.push(tge.texture.tempCanvas.ctx.getImageData(0, 0, 1, 1));
+
+
+        texture.needsUpdate = true;
+        return (texture);
+    };
+
     var cubeMapTextureSequence = [
         GL_TEXTURE_CUBE_MAP_NEGATIVE_X, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
         GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
