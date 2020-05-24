@@ -7,43 +7,6 @@
 #endif
 
 
-/*chunk-common-varying*/
-varying vec4 tge_v_unprojected_vertex;
-
-/*chunk-pipelineParams*/
-uniform vec4 tge_u_pipelineParams;
-uniform vec4 tge_u_shadingParams;
-
-float tge_u_frameTime;
-float tge_u_frameTimeDelta;
-
-
-
-void initPipelineParams() {
-	tge_u_frameTime = tge_u_pipelineParams.x;
-	tge_u_frameTimeDelta = tge_u_pipelineParams.y;
-}
-
-
-/*chunk-temp*/
-
-const int MAX_BONES=10;
-uniform vec4 tarray[MAX_BONES];
-uniform float u_float;
-uniform vec2 u_vec2;
-uniform vec3 u_vec3;
-uniform vec4 u_vec4;
-uniform mat3 u_mat3;
-uniform mat4 u_mat4;
-uniform sampler2D u_sampler;
-	tge_u_frameTime=u_float;
-	tge_u_frameTime=u_vec3.x;
-	tge_u_frameTime=u_vec4.x;
-	tge_u_frameTime=u_mat3[0].x;
-	tge_u_frameTime=u_mat4[0].x;
-	vec4 v1= texture2D(u_sampler,u_vec2);
-
-
 /*chunk-mesh-attributes-all*/
 attribute vec3 tge_a_position;
 attribute vec3 tge_a_normal;
@@ -176,35 +139,10 @@ float SampleShadowMapPCF(sampler2D shadowMap, vec2 coords, float compare, vec2 t
 	return result / NUM_SAMPLES_SQUARED;
 }
 
-float linstep(float low, float high, float v)
-{
-	return clamp((v - low) / (high - low), 0.0, 1.0);
-}
-
-float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, float varianceMin, float lightBleedReductionAmount)
-{
-	float depth = texture2D(shadowMap, coords.xy).r;
-
-
-	float dx = dFdx(depth);
-	float dy = dFdy(depth);
-	float moment2 = depth * depth + 0.25 * (dx * dx + dy * dy);
-	vec2 moments = vec2(depth, moment2);
-
-
-	float p = step(compare, moments.x);
-	float variance = max(moments.y - moments.x * moments.x, varianceMin);
-
-	float d = compare - moments.x;
-	float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d * d));
-
-	return min(max(p, pMax), 1.0);
-}
 
 
 /*chunk-post_process_flat*/
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 
 const vec2 madd=vec2(0.5,0.5);
 varying vec2 tge_v_uv;
@@ -212,20 +150,17 @@ attribute vec2 tge_a_position;
 
 
 void vertex(){
-	initPipelineParams();	
 	gl_Position = vec4(tge_a_position.xy,0.0,1.0);	
 	tge_v_uv = tge_a_position.xy*madd+madd;   
 }
 
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 
 uniform sampler2D tge_u_texture_input;
 varying vec2 tge_v_uv;
 
 
 void fragment(void) {
-	initPipelineParams();	
 	gl_FragColor = texture2D(tge_u_texture_input, tge_v_uv) ;	
 }
 
@@ -233,67 +168,3 @@ void fragment(void) {
 
 
 
-/*chunk-variance-cascade-shadow-receiver*/
-
-<?for(var i = 0;i <param('count');i++){?>
-	uniform mat4 tge_u_lightCameraMatrix<?=i?>;
-	varying vec4 tge_v_shadow_light_vertex<?=i?>;	
-<?}?>
-
-void vertex(){
-	super_vertex();
-
-	<?for(var i = 0;i <param('count');i++){?>
-	tge_v_shadow_light_vertex<?=i?> = tge_u_lightCameraMatrix<?=i?> * tge_v_shadow_vertex;
-		
-	<?}?>
-	
-}
-
-<?=chunk('precision')?>
-<?=chunk('variance-shadow-sampling')?>
-
-<?for(var i = 0;i <param('count');i++){?>	
-	varying vec4 tge_v_shadow_light_vertex<?=i?>;	
-<?}?>
-
-
-uniform sampler2D tge_u_shadowMap;
-uniform vec4 tge_u_shadow_params;
-
-float vpSize=<?=(1/param('count')).toFixed(3)?>;
-
-
-float bias = 0.0;
-
-float getShadowSample(float i,vec4 shadow_light_vertex,float s) {
-
-if(s>0.0) return s;
-	vec3 shadowMapCoords = (shadow_light_vertex.xyz/shadow_light_vertex.w);	
-
-
-	shadow_light_vertex.xyz = shadow_light_vertex.xyz * 0.5 + 0.5;
-
-	shadowMapCoords.y *= vpSize;
-	shadowMapCoords.y += i * vpSize;
-
-
-	if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);  
-	if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
-	
-   
-   return 0.2- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
-    0.000000005,0.000000);
-		
-}
-
-
-void fragment(void) {	
-float s=0.0;
-bias= (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x;
-<?for(var i =param('count')-1;i>-1;i--){?>	
-	s=getShadowSample(<?=(i.toFixed(2))?>,tge_v_shadow_light_vertex<?=i?>,s);
-<?}?>
-
- gl_FragColor = vec4(tge_u_shadow_params.y)* s;
-}

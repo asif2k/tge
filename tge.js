@@ -142,7 +142,7 @@ function $eachindex(callback, index) {
     func(index || 0);
 }
 
-$mergesort = (function (array, comparefn) {
+var $mergesort = (function (array, comparefn) {
     var i, j, k
     function merge(arr, aux, lo, mid, hi, comparefn) {
         i = lo;
@@ -203,6 +203,21 @@ $mergesort = (function (array, comparefn) {
 
 
     return merge_sort;
+})();
+
+var $load_image_data = (function () {
+    var canv = $create_canvas(1, 1);
+    var img = new Image();
+    return function (url, cb,w,h) {
+        img.onload = function () {
+            canv.setSize(w || this.width, h || this.height);
+            canv.ctx.drawImage(this, 0, 0, canv.width, canv.height);
+            if (cb) cb(canv._getImageData().data);
+            canv._putImageData();
+        }
+        img.src = url;
+    }
+
 })();
 
 
@@ -268,7 +283,7 @@ $assign(tge, {
         SHADED: 4,
         CAST_SHADOW: 8,
         RECEIVE_SHADOW: 16,
-        CAST_REFLECTION: 32,
+        WIREFRAME: 32,
         RECEIVE_REFLECTION: 64,
         TRANSPARENT: 128,
         OPUQUE: 256,
@@ -1328,6 +1343,75 @@ tge.createFloat32 = (function (len, creator) {
 
     });
 
+
+    tge.perlin_noise = (function () {
+
+        var p = [151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10,
+            23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87,
+            174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211,
+            133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208,
+            89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5,
+            202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119,
+            248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232,
+            178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249,
+            14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205,
+            93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180];
+
+        for (var i = 0; i < 256; i++) {
+
+            p[256 + i] = p[i];
+
+        }
+
+        function fade(t) {
+
+            return t * t * t * (t * (t * 6 - 15) + 10);
+
+        }
+
+        function lerp(t, a, b) {
+
+            return a + t * (b - a);
+
+        }
+
+        function grad(hash, x, y, z) {
+
+            var h = hash & 15;
+            var u = h < 8 ? x : y, v = h < 4 ? y : h == 12 || h == 14 ? x : z;
+            return ((h & 1) == 0 ? u : - u) + ((h & 2) == 0 ? v : - v);
+
+        }
+
+        return function (x, y, z) {
+
+            var floorX = Math.floor(x), floorY = Math.floor(y), floorZ = Math.floor(z);
+
+            var X = floorX & 255, Y = floorY & 255, Z = floorZ & 255;
+
+            x -= floorX;
+            y -= floorY;
+            z -= floorZ;
+
+            var xMinus1 = x - 1, yMinus1 = y - 1, zMinus1 = z - 1;
+
+            var u = fade(x), v = fade(y), w = fade(z);
+
+            var A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z, B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+
+            return lerp(w, lerp(v, lerp(u, grad(p[AA], x, y, z),
+                grad(p[BA], xMinus1, y, z)),
+                lerp(u, grad(p[AB], x, yMinus1, z),
+                    grad(p[BB], xMinus1, yMinus1, z))),
+                lerp(v, lerp(u, grad(p[AA + 1], x, y, zMinus1),
+                    grad(p[BA + 1], xMinus1, y, z - 1)),
+                    lerp(u, grad(p[AB + 1], x, yMinus1, zMinus1),
+                        grad(p[BB + 1], xMinus1, yMinus1, zMinus1))));
+
+        }
+
+    })();
+
 })();
 
 
@@ -1650,6 +1734,7 @@ tge.geometry = $extend(function (proto) {
     proto.setIndices = function (indices) {
         this.indexData = new Uint16Array(indices);
         this.numItems = this.indexData.length;
+        this.indexNeedsUpdate = true;
     };
     proto.prepareVerticesList = function (vertexSize) {
         vertexSize = vertexSize || 3;
@@ -1731,12 +1816,100 @@ tge.geometry = $extend(function (proto) {
         this.attributes = {};
         this.indexBuffer = null;
         this.indexData = null;
+        this.wireframe_index_data = null;
+        this.wireframe_index_buffer = null;
         this.indexNeedsUpdate = false;
         this.version = 0;
         this.size = tge.vec3();
         return (this);
 
     }
+
+    
+
+    geometry.activate_index = (function () {
+
+
+        var a, b, c, i, ii;
+        function update_wireframe_indices(geo) {
+            if (geo.wireframe_index_data === null) {
+                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+            } else if (geo.wireframe_index_data.length < geo.indexData.length * 2) {
+                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+            }
+
+            ii = 0;
+            for (i = 0; i < geo.indexData.length; i += 3) {
+                a = geo.indexData[i + 0];
+                b = geo.indexData[i + 1];
+                c = geo.indexData[i + 2];
+
+                geo.wireframe_index_data[ii] = a;
+                geo.wireframe_index_data[ii + 1] = b;
+                geo.wireframe_index_data[ii + 2] = b;
+                geo.wireframe_index_data[ii + 3] = c;
+                geo.wireframe_index_data[ii + 4] = c;
+                geo.wireframe_index_data[ii + 5] = a;
+                ii += 6;
+
+            }
+
+        }
+
+        return function (gl, geo,is_wireframe) {
+
+            if (geo.indexData !== null) {
+
+
+                if (is_wireframe) {
+                    if (geo.wireframe_index_buffer===null) {
+                        geo.wireframe_index_buffer = gl.createBuffer();
+                    }
+
+
+                    if (geo.indexNeedsUpdate) {
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
+
+                        update_wireframe_indices(geo);
+
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+
+
+                        geo.indexNeedsUpdate = false;
+                    }
+                    else {                        
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        if (geo.wireframe_index_data === null) {
+                            update_wireframe_indices(geo);
+                            gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+                        }
+                    }
+                }
+                else {
+
+                    if (geo.indexNeedsUpdate) {
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
+
+                        geo.indexNeedsUpdate = false;
+                    }
+                    else gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+
+
+
+                }
+
+              
+
+
+            }
+
+
+        }
+    })();
+
 
     geometry.compile = (function () {
 
@@ -1761,21 +1934,43 @@ tge.geometry = $extend(function (proto) {
 
         var id = null;
 
+        /*
+        var vv = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ];
+        var centers = new Float32Array(1000 * 3);
+        var ii = 0;
+        for (var i = 0; i < 1000; i++) {
+            ii = i % 3;
+            centers[i * 3 + 0] = vv[ii][0];
+            centers[i * 3 + 1] = vv[ii][1];
+            centers[i * 3 + 2] = vv[ii][2];
+        }
+
+        geometry.tge_a_center = {
+            dataType: GL_FLOAT,
+            itemSize: 3, data: centers, needsUpdate: true
+        };
+        */
 
 
-
+        /* default color buffer */
         geometry.tge_a_color = {
             dataType: GL_FLOAT,
             itemSize: 4, stride: 0, offset: 0, divisor: 0, array: null,
-            data: new Float32Array(60000)
+            data: new Float32Array(90000)
         };
         geometry.tge_a_color.data.fill(1);
 
         return function (gl, geo) {
 
-            if (!geometry.tge_a_color.dest) {
-                compileAttribute(gl, geometry.tge_a_color);
+            if (!tge.geometry.tge_a_color.dest) {
+                compileAttribute(gl, tge.geometry.tge_a_color);
+               // compileAttribute(gl, tge.geometry.tge_a_center);
             }
+
 
 
 
@@ -1783,7 +1978,8 @@ tge.geometry = $extend(function (proto) {
                 compileAttribute(gl, geo.attributes[id]);
             }
 
-            geo.attributes.tge_a_color = geo.attributes.tge_a_color || geometry.tge_a_color;
+            geo.attributes.tge_a_color = geo.attributes.tge_a_color || tge.geometry.tge_a_color;
+            geo.attributes.tge_a_center = geo.attributes.tge_a_center || tge.geometry.tge_a_center;
 
             if (geo.indexData) {
                 if (!geo.indexBuffer) geo.indexBuffer = gl.createBuffer();
@@ -1826,15 +2022,15 @@ tge.geometry = $extend(function (proto) {
 
 
 
-                tge.vec3.sub(v1v2, v2, v1);
-                tge.vec3.sub(v1v3, v3, v1);
+                tge.vec3.subtract(v1v2, v2, v1);
+                tge.vec3.subtract(v1v3, v3, v1);
                 tge.vec3.normalize(v1v2, v1v2);
                 tge.vec3.normalize(v1v3, v1v3);
                 tge.vec3.cross(normal, v1v2, v1v3);
                 tge.vec3.normalize(normal, normal);
 
                 weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
-                tge.vec3.sub(v2v3Alias, v3, v2);
+                tge.vec3.subtract(v2v3Alias, v3, v2);
                 tge.vec3.normalize(v2v3Alias, v2v3Alias);
                 weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
 
@@ -2584,8 +2780,9 @@ tge.geometry = $extend(function (proto) {
     })();
 
     geometry.wavefront_obj_url = (function () {
-        var req = new XMLHttpRequest;
+        
         return function (url, done) {
+            var req = new XMLHttpRequest;
             if (done) {
                 req.open("GET", url, !0);
                 req.onload = function () {
@@ -2822,47 +3019,10 @@ tge.shader = $extend(function (proto) {
     shader.loadChunks(`/*chunk-precision*/
 #extension GL_OES_standard_derivatives : enable 
 #if GL_FRAGMENT_PRECISION_HIGH == 1 
-precision highp float;
+  precision highp float;
 #else
-precision mediump float;
+  precision mediump float;
 #endif
-
-
-/*chunk-common-varying*/
-varying vec4 tge_v_unprojected_vertex;
-
-/*chunk-pipelineParams*/
-uniform vec4 tge_u_pipelineParams;
-uniform vec4 tge_u_shadingParams;
-
-float tge_u_frameTime;
-float tge_u_frameTimeDelta;
-
-
-
-void initPipelineParams() {
-tge_u_frameTime = tge_u_pipelineParams.x;
-tge_u_frameTimeDelta = tge_u_pipelineParams.y;
-}
-
-
-/*chunk-temp*/
-
-const int MAX_BONES=10;
-uniform vec4 tarray[MAX_BONES];
-uniform float u_float;
-uniform vec2 u_vec2;
-uniform vec3 u_vec3;
-uniform vec4 u_vec4;
-uniform mat3 u_mat3;
-uniform mat4 u_mat4;
-uniform sampler2D u_sampler;
-tge_u_frameTime=u_float;
-tge_u_frameTime=u_vec3.x;
-tge_u_frameTime=u_vec4.x;
-tge_u_frameTime=u_mat3[0].x;
-tge_u_frameTime=u_mat4[0].x;
-vec4 v1= texture2D(u_sampler,u_vec2);
 
 
 /*chunk-mesh-attributes-all*/
@@ -2997,35 +3157,10 @@ result += SampleShadowMapLinear(shadowMap, coords + coordsOffset, compare, texel
 return result / NUM_SAMPLES_SQUARED;
 }
 
-float linstep(float low, float high, float v)
-{
-return clamp((v - low) / (high - low), 0.0, 1.0);
-}
-
-float SampleVarianceShadowMap(sampler2D shadowMap, vec2 coords, float compare, float varianceMin, float lightBleedReductionAmount)
-{
-float depth = texture2D(shadowMap, coords.xy).r;
-
-
-float dx = dFdx(depth);
-float dy = dFdy(depth);
-float moment2 = depth * depth + 0.25 * (dx * dx + dy * dy);
-vec2 moments = vec2(depth, moment2);
-
-
-float p = step(compare, moments.x);
-float variance = max(moments.y - moments.x * moments.x, varianceMin);
-
-float d = compare - moments.x;
-float pMax = linstep(lightBleedReductionAmount, 1.0, variance / (variance + d * d));
-
-return min(max(p, pMax), 1.0);
-}
 
 
 /*chunk-post_process_flat*/
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 
 const vec2 madd=vec2(0.5,0.5);
 varying vec2 tge_v_uv;
@@ -3033,20 +3168,17 @@ attribute vec2 tge_a_position;
 
 
 void vertex(){
-initPipelineParams();
 gl_Position = vec4(tge_a_position.xy,0.0,1.0);
-tge_v_uv = tge_a_position.xy*madd+madd; 
+tge_v_uv = tge_a_position.xy*madd+madd;  
 }
 
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 
 uniform sampler2D tge_u_texture_input;
 varying vec2 tge_v_uv;
 
 
 void fragment(void) {
-initPipelineParams();
 gl_FragColor = texture2D(tge_u_texture_input, tge_v_uv) ;
 }
 
@@ -3054,70 +3186,6 @@ gl_FragColor = texture2D(tge_u_texture_input, tge_v_uv) ;
 
 
 
-/*chunk-variance-cascade-shadow-receiver*/
-
-<?for(var i = 0;i <param('count');i++){?>
-uniform mat4 tge_u_lightCameraMatrix<?=i?>;
-varying vec4 tge_v_shadow_light_vertex<?=i?>;
-<?}?>
-
-void vertex(){
-super_vertex();
-
-<?for(var i = 0;i <param('count');i++){?>
-tge_v_shadow_light_vertex<?=i?> = tge_u_lightCameraMatrix<?=i?> * tge_v_shadow_vertex;
-
-<?}?>
-
-}
-
-<?=chunk('precision')?>
-<?=chunk('variance-shadow-sampling')?>
-
-<?for(var i = 0;i <param('count');i++){?>
-varying vec4 tge_v_shadow_light_vertex<?=i?>;
-<?}?>
-
-
-uniform sampler2D tge_u_shadowMap;
-uniform vec4 tge_u_shadow_params;
-
-float vpSize=<?=(1/param('count')).toFixed(3)?>;
-
-
-float bias = 0.0;
-
-float getShadowSample(float i,vec4 shadow_light_vertex,float s) {
-
-if(s>0.0) return s;
-vec3 shadowMapCoords = (shadow_light_vertex.xyz/shadow_light_vertex.w);
-
-
-shadow_light_vertex.xyz = shadow_light_vertex.xyz * 0.5 + 0.5;
-
-shadowMapCoords.y *= vpSize;
-shadowMapCoords.y += i * vpSize;
-
-
-if (shadowMapCoords.y > 1.0 || shadowMapCoords.x > 1.0 || shadowMapCoords.z > 1.0) return (0.0);
-if (shadowMapCoords.y < 0.0 || shadowMapCoords.x < 0.0 || shadowMapCoords.z < 0.0) return (0.0);
-
- 
- return 0.2- SampleVarianceShadowMap(tge_u_shadowMap,shadowMapCoords.xy,shadowMapCoords.z,
-0.000000005,0.000000);
-
-}
-
-
-void fragment(void) {
-float s=0.0;
-bias= (1.0/tge_u_shadow_params.z)*tge_u_shadow_params.x;
-<?for(var i =param('count')-1;i>-1;i--){?>
-s=getShadowSample(<?=(i.toFixed(2))?>,tge_v_shadow_light_vertex<?=i?>,s);
-<?}?>
-
- gl_FragColor = vec4(tge_u_shadow_params.y)* s;
-}
 `);
     
     shader.parse = function (_source, params) {
@@ -3887,6 +3955,18 @@ tge.material = $extend(function (proto,_super) {
     }
 
 
+    proto.getShader = function (shader) {
+        return shader;
+        if (this.wireframe) {
+            if (!shader.wireframe_shader) {
+                shader.wireframe_shader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('wireframe_material')?>"), shader, true);                
+            }
+            return shader.wireframe_shader;
+        }
+
+        return shader;
+    }
+
     proto.renderMesh = function (engine, shader, mesh) {
 
         if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
@@ -3927,11 +4007,22 @@ tge.material = $extend(function (proto,_super) {
         engine.updateModelUniforms(mesh.model);
         mesh.drawCount = mesh.geo.numItems;
 
-        if (mesh.geo.indexData) {
-            engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
+        if (mesh.geo.indexData !== null) {
+            tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+            if (this.wireframe) {
+                engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_SHORT, mesh.drawOffset * 2);
+            }
+            else {
+                engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
+            }
         }
         else {
-            engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
+            if (this.wireframe) {
+                engine.gl.drawArrays(GL_LINES, mesh.drawOffset, mesh.drawCount);
+            }
+            else {
+                engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
+            }
         }
 
     }
@@ -3986,8 +4077,10 @@ tge.material = $extend(function (proto,_super) {
 
     }
     material.shader = tge.pipleline_shader.parse(`<?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
-<?=chunk('mesh-attributes-flat')?>
+
+attribute vec3 tge_a_position;
+attribute vec4 tge_a_color;
+attribute vec2 tge_a_uv;
 
 uniform mat4 tge_u_viewProjectionMatrix;
 uniform mat4 tge_u_modelMatrix;
@@ -3997,25 +4090,22 @@ varying vec4 tge_v_color;
 varying vec2 tge_v_uv;
 
 void vertex(){
-initPipelineParams();
 tge_v_shadow_vertex = tge_u_modelMatrix * vec4(tge_a_position,1.0);
-gl_Position = tge_u_viewProjectionMatrix* tge_v_shadow_vertex;
+  gl_Position = tge_u_viewProjectionMatrix* tge_v_shadow_vertex;
 tge_v_color= tge_a_color;
-
 tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
 
 }
 
 
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
+
 uniform mat4 tge_u_objectMaterial;
 uniform sampler2D tge_u_ambientTexture;
 varying vec4 tge_v_color;
 varying vec2 tge_v_uv;
 varying vec4 tge_v_shadow_vertex;
 void fragment(void) {
-initPipelineParams();
 gl_FragColor = texture2D(tge_u_ambientTexture, tge_v_uv) * tge_v_color * tge_u_objectMaterial[0];
 gl_FragColor.w*=tge_u_objectMaterial[0].w;
 }`);
@@ -4080,7 +4170,6 @@ tge.phong_material = $extend(function (proto, _super) {
 
    
     phong_material.shader = tge.pipleline_shader.parse(`<?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 <?=chunk('mesh-attributes-all')?>
 <?=chunk('camera-matrix-all')?>
 <?=chunk('model-matrix-all')?>
@@ -4092,7 +4181,6 @@ varying vec3 tge_v_normal;
 
 
 void vertex(){
-initPipelineParams();
 tge_v_shadow_vertex = tge_u_modelMatrix * vec4(tge_a_position,1.0);
 gl_Position = tge_u_modelMatrix * vec4(tge_a_position, 1.0);
 tge_v_normal = normalize(tge_u_modelMatrix * vec4(tge_a_normal,0.0)).xyz;
@@ -4101,7 +4189,6 @@ gl_Position = tge_u_viewProjectionMatrix * tge_v_shadow_vertex;
 }
 
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 <?=chunk('lights-material-all')?>
 <?=chunk('lights-matrix-all')?>
 
@@ -4118,7 +4205,6 @@ varying vec3 tge_v_normal;
 
 
 void fragment(void) {
-initPipelineParams();
 vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
 <?for (var i = 0;i < param('fws_lightsCount');i++) {?>
 fws_totalLight += fws_lighting(
@@ -4177,9 +4263,9 @@ varying vec2 tge_v_nm_uv;
 
 void vertex(){
 super_vertex();
-vec3 t = normalize((tge_u_modelMatrix * tge_a_tangent).xyz);
-t = normalize(t - dot(t, tge_v_normal) * tge_v_normal);
-tge_v_tbnMatrix = mat3(t, cross(tge_v_normal, t), tge_v_normal);
+  vec3 t = normalize((tge_u_modelMatrix * tge_a_tangent).xyz);
+  t = normalize(t - dot(t, tge_v_normal) * tge_v_normal);  
+  tge_v_tbnMatrix = mat3(t, cross(tge_v_normal, t), tge_v_normal);
 
 tge_v_nm_uv = (tge_u_normalMapMatrix * vec3(tge_a_uv, 1.0)).xy;
 
@@ -4192,8 +4278,6 @@ varying vec2 tge_v_nm_uv;
 
 uniform vec4 tge_u_dispParams;
 void fragment(){
- initPipelineParams();
-
 vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
 
 float baseBias = tge_u_dispParams.x*0.5;
@@ -4219,17 +4303,6 @@ gl_FragColor.w *= tge_u_objectMaterial[0].w;
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
 
 `);
 
@@ -4290,8 +4363,8 @@ void vertex(){
 
 
  tge_v_uv = tge_a_position;
-gl_Position = tge_a_position;
-gl_Position.z = 1.0;
+ gl_Position = tge_a_position;
+ gl_Position.z = 1.0;
 
 }
 
@@ -4306,14 +4379,14 @@ uniform vec4 tge_u_skyhorizon_color;
 varying vec4 tge_v_uv;
 
 void fragment(void) {
-
+  
 vec4 t = tge_u_viewProjectionMatrix * tge_v_uv;
-gl_FragColor = textureCube(tge_u_ambientTexture, normalize(t.xyz / t.w));
+  gl_FragColor = textureCube(tge_u_ambientTexture, normalize(t.xyz / t.w));
+  
 
+  gl_FragColor *= mix(tge_u_skyhorizon_color, tge_u_skytop_color, t.y);
 
-gl_FragColor *= mix(tge_u_skyhorizon_color,tge_u_skytop_color, t.y);
-
- 
+  
 
 }`);
 
@@ -4360,9 +4433,8 @@ tge.dynamic_skybox_material = $extend(function (proto, _super) {
         shader.setUniform("tge_u_viewProjectionMatrix", viewDirectionProjectionInverseMatrix);
         shader.setUniform("sun_params", this.sunPosition);
         engine.gl.depthFunc(GL_LEQUAL);
-
-
         engine.gl.drawArrays(this.drawType, 0, mesh.geo.numItems);
+
     };
     dynamic_skybox_material.shader = tge.pipleline_shader.parse(`<?=chunk('precision')?>
 attribute vec4 tge_a_position;
@@ -4372,8 +4444,8 @@ void vertex(){
 
 
  tge_v_uv = tge_a_position;
-gl_Position = tge_a_position;
-gl_Position.z = 1.0;
+ gl_Position = tge_a_position;
+ gl_Position.z = 1.0;
 
 }
 
@@ -4447,12 +4519,12 @@ float F = 0.30;
 float W = 1000.0;
 
 vec3 Uncharted2Tonemap(vec3 x) {
- return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
+  return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F))-E/F;
 }
 
 void fragment(void) {
 
- fragPosition=(tge_u_viewProjectionMatrix * tge_v_uv).xyz;
+  fragPosition=(tge_u_viewProjectionMatrix * tge_v_uv).xyz;
 vec3 sunPosition=sun_params.xyz;
 float sunfade = 1.0 - clamp(1.0 - exp(sunPosition.y), 0.0, 1.0);
 float reileighCoefficient = reileigh - (1.0 * (1.0-sunfade));
@@ -4540,7 +4612,358 @@ tge.mesh = $extend(function (proto) {
 });
 
 
+/*./terrain.js*/
+
+
+
+
+
+tge.terrain_rtin = function (gridSize) {
+    this.gridSize = gridSize;
+    var tileSize = gridSize - 1;
+    if (tileSize & (tileSize - 1)) throw new Error(
+        `Expected grid size to be 2^n+1, got ${gridSize}.`);
+
+    this.numTriangles = tileSize * tileSize * 2 - 2;
+    this.numParentTriangles = this.numTriangles - tileSize * tileSize;
+    this.tileSize = tileSize;
+    this.indices = new Uint32Array(this.gridSize * this.gridSize);
+
+    // coordinates for all possible triangles in an RTIN tile
+    this.coords = new Uint16Array(this.numTriangles * 4);
+
+    // get triangle coordinates from its index in an implicit binary tree
+    var id, ax, ay, bx, by, cx, cy, mx, my, k;
+    for (var i = 0; i < this.numTriangles; i++) {
+        id = i + 2;
+        ax = 0; ay = 0; bx = 0; by = 0; cx = 0; cy = 0;
+        if (id & 1) {
+            bx = by = cx = tileSize; // bottom-left triangle
+        } else {
+            ax = ay = cy = tileSize; // top-right triangle
+        }
+        while ((id >>= 1) > 1) {
+            mx = (ax + bx) >> 1;
+            my = (ay + by) >> 1;
+
+            if (id & 1) { // left half
+                bx = ax; by = ay;
+                ax = cx; ay = cy;
+            } else { // right half
+                ax = bx; ay = by;
+                bx = cx; by = cy;
+            }
+            cx = mx; cy = my;
+        }
+        k = i * 4;
+        this.coords[k + 0] = ax;
+        this.coords[k + 1] = ay;
+        this.coords[k + 2] = bx;
+        this.coords[k + 3] = by;
+    }
+}
+
+tge.terrain_mesh = $extend(function (proto,_super) {
+
+    function generateHeight(width, height) {
+
+        var size = width * height, data = new Float32Array(size),
+            quality = 12, z = Math.random() *150;
+
+        for (var j = 0; j < 4; j++) {
+
+            for (var i = 0; i < size; i++) {
+
+                var x = i % width, y = ~ ~(i / width);
+                data[i] += Math.abs(tge.perlin_noise(x / quality, y / quality, z) * quality * 1.75);
+
+            }
+
+            quality *= 5;
+
+        }
+
+        return data;
+
+    }
+
+
+    function terrain_mesh(gridSize, data) {
+        _super.apply(this, [undefined, new tge.phong_material()]);
+        gridSize = gridSize || 65;
+        this.rtin = new tge.terrain_rtin(gridSize);
+        var tileSize = this.rtin.tileSize;
+        //  this.terrain = generateHeight( gridSize, gridSize);
+        this.terrain = new Float32Array(gridSize*gridSize);
+        this.errors = new Float32Array(this.terrain.length);
+
+        console.log("data", data);
+        for (let y = 0; y < tileSize; y++) {
+            for (let x = 0; x < tileSize; x++) {
+                const k = (y * tileSize + x) * 4;
+                const r = data[k + 0];
+                const g = data[k + 1];
+                const b = data[k + 2];
+                this.terrain[y * gridSize + x] = (r * 256 * 256 + g * 256.0 + b) / 10 - 10000.0;
+            }
+        }
+
+
+       
+        var terrainExaggeration = 1.5;
+        var metersPerPixel = 114.73948277849482;
+
+        
+        const vertices = new Float32Array(gridSize * gridSize * 3);
+        const indices = new Uint32Array(tileSize * tileSize * 3);
+        let index = 0;
+
+        for (let y = 0; y <= tileSize; y++) {
+            for (let x = 0; x <= tileSize; x++) {
+                const i = y * gridSize + x;
+                vertices[3 * i + 0] = ((y/ tileSize)-0.5)*3;
+                vertices[3 * i + 2] = -((x / tileSize) - 0.1) * 3
+                vertices[3 * i + 1] = this.terrain[i]/  metersPerPixel / tileSize * terrainExaggeration;
+
+                
+                indices[index++] = i + 1;
+                indices[index++] = i;
+                indices[index++] = i + gridSize;
+              // indices[index++] = i + 1;
+               // indices[index++] = i + gridSize;
+               // indices[index++] = i + gridSize + 1;
+            }
+        }
+
+
+
+
+        var g = new tge.geometry();
+        g.addAttribute("tge_a_position", {
+            data: vertices,
+            itemSize: 3, offset: 0
+        });
+        g.addAttribute("tge_a_normal", { itemSize: 3, data: new Float32Array(vertices.length) });
+        g.indexData = indices;
+        g.numItems = g.indexData.length;
+       
+
+        g.geoType = "terrain";
+
+        this.geo = g;
+
+
+        tge.geometry.calculate_normals(this.geo);
+
+        this.update_terrain();
+        this.update_mesh(15);
+       // this.material.drawType = GL_LINE_LOOP;
+
+        /*
+        
+        */
+       // this.update_terrain();
+      //  this.update_mesh(55);
+        
+        return this;
+    }
+    proto.update_terrain = function () {
+        var gridSize = this.rtin.gridSize;
+        var errors = this.errors;
+        var tileSize = this.rtin.tileSize;
+        var terrain = this.terrain;
+        const numSmallestTriangles = tileSize * tileSize;
+        const numTriangles = numSmallestTriangles * 2 - 2; // 2 + 4 + 8 + ... 2^k = 2 * 2^k - 2
+        const lastLevelIndex = numTriangles - numSmallestTriangles;
+
+        // iterate over all possible triangles, starting from the smallest level
+        for (let i = numTriangles - 1; i >= 0; i--) {
+
+            // get triangle coordinates from its index in an implicit binary tree
+            let id = i + 2;
+            let ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
+            if (id & 1) {
+                bx = by = cx = tileSize; // bottom-left triangle
+            } else {
+                ax = ay = cy = tileSize; // top-right triangle
+            }
+            while ((id >>= 1) > 1) {
+                const mx = (ax + bx) >> 1;
+                const my = (ay + by) >> 1;
+
+                if (id & 1) { // left half
+                    bx = ax; by = ay;
+                    ax = cx; ay = cy;
+                } else { // right half
+                    ax = bx; ay = by;
+                    bx = cx; by = cy;
+                }
+                cx = mx; cy = my;
+            }
+
+            // calculate error in the middle of the long edge of the triangle
+            const interpolatedHeight = (terrain[ay * gridSize + ax] + terrain[by * gridSize + bx]) / 2;
+            const middleIndex = ((ay + by) >> 1) * gridSize + ((ax + bx) >> 1);
+            const middleError = Math.abs(interpolatedHeight - terrain[middleIndex]);
+
+            if (i >= lastLevelIndex) { // smallest triangles
+                errors[middleIndex] = middleError;
+
+            } else { // bigger triangles; accumulate error with children
+                const leftChildError = errors[((ay + cy) >> 1) * gridSize + ((ax + cx) >> 1)];
+                const rightChildError = errors[((by + cy) >> 1) * gridSize + ((bx + cx) >> 1)];
+                errors[middleIndex] = Math.max(errors[middleIndex], middleError, leftChildError, rightChildError);
+            }
+        }
+    }
+    proto.update_mesh = function (maxError) {
+        let i = 0;
+        var indices =[];
+        var gridSize = this.rtin.gridSize;
+        var errors = this.errors;
+        function processTriangle(ax, ay, bx, by, cx, cy) {
+            // middle of the long edge
+            const mx = (ax + bx) >> 1;
+            const my = (ay + by) >> 1;
+
+            if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && errors[my * gridSize + mx] > maxError) {
+                // triangle doesn't approximate the surface well enough; split it into two
+                processTriangle(cx, cy, ax, ay, mx, my);
+                processTriangle(bx, by, cx, cy, mx, my);
+
+            } else {
+                // add a triangle to the final mesh
+                indices[i++] = ay * gridSize + ax;
+                indices[i++] = by * gridSize + bx;
+                indices[i++] = cy * gridSize + cx;
+            }
+        }
+
+        processTriangle(0, 0, this.rtin.tileSize, this.rtin.tileSize, this.rtin.tileSize, 0);
+        processTriangle(this.rtin.tileSize, this.rtin.tileSize, 0, 0, 0, this.rtin.tileSize);
+
+        this.geo.setIndices(indices);
+        tge.geometry.calculate_normals(this.geo);
+    }
+    proto.update_mesh1 = function (maxError) {
+        maxError = maxError || 0;
+        var size = this.rtin.gridSize;
+        var indices = this.rtin.indices;
+        var errors = this.errors;
+        let numVertices = 0;
+        let numTriangles = 0;
+        const max = size - 1;
+
+        // use an index grid to keep track of vertices that were already used to avoid duplication
+        indices.fill(0);
+
+        // retrieve mesh in two stages that both traverse the error map:
+        // - countElements: find used vertices (and assign each an index), and count triangles (for minimum allocation)
+        // - processTriangle: fill the allocated vertices & triangles typed arrays
+
+        function countElements(ax, ay, bx, by, cx, cy) {
+            const mx = (ax + bx) >> 1;
+            const my = (ay + by) >> 1;
+
+            var err = errors[my * size + mx];
+            if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && err > maxError) {
+                countElements(cx, cy, ax, ay, mx, my);
+                countElements(bx, by, cx, cy, mx, my);
+            } else {
+                indices[ay * size + ax] = indices[ay * size + ax] || ++numVertices;
+                indices[by * size + bx] = indices[by * size + bx] || ++numVertices;
+                indices[cy * size + cx] = indices[cy * size + cx] || ++numVertices;
+                numTriangles++;
+            }
+        }
+        countElements(0, 0, max, max, max, 0);
+        countElements(max, max, 0, 0, 0, max);
+
+        const vertices = new Float32Array(numVertices * 2);
+        const triangles = new Uint16Array(numTriangles * 3);
+        let triIndex = 0;
+
+        function processTriangle(ax, ay, bx, by, cx, cy) {
+            const mx = (ax + bx) >> 1;
+            const my = (ay + by) >> 1;
+
+            if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && errors[my * size + mx] > maxError) {
+                // triangle doesn't approximate the surface well enough; drill down further
+                processTriangle(cx, cy, ax, ay, mx, my);
+                processTriangle(bx, by, cx, cy, mx, my);
+
+            } else {
+                // add a triangle
+                const a = indices[ay * size + ax] - 1;
+                const b = indices[by * size + bx] - 1;
+                const c = indices[cy * size + cx] - 1;
+
+                vertices[2 * a] = ax;
+                vertices[2 * a + 1] = ay;
+
+                vertices[2 * b] = bx;
+                vertices[2 * b + 1] = by;
+
+                vertices[2 * c] = cx;
+                vertices[2 * c + 1] = cy;
+
+                triangles[triIndex++] = a;
+                triangles[triIndex++] = b;
+                triangles[triIndex++] = c;
+            }
+        }
+        processTriangle(0, 0, max, max, max, 0);
+        processTriangle(max, max, 0, 0, 0, max);
+
+
+        
+
+
+
+
+
+        
+
+    };
+    proto.update_terrain2 = function () {
+        var size = this.rtin.gridSize;
+        for (let i = this.rtin.numTriangles - 1; i >= 0; i--) {
+            const k = i * 4;
+            const ax = this.rtin.coords[k + 0];
+            const ay = this.rtin.coords[k + 1];
+            const bx = this.rtin.coords[k + 2];
+            const by = this.rtin.coords[k + 3];
+            const mx = (ax + bx) >> 1;
+            const my = (ay + by) >> 1;
+            const cx = mx + my - ay;
+            const cy = my + ax - mx;
+
+            // calculate error in the middle of the long edge of the triangle
+            const interpolatedHeight = (this.terrain[ay * size + ax] + this.terrain[by * size + bx]) / 2;
+            const middleIndex = my * size + mx;
+            const middleError = Math.abs(interpolatedHeight - this.terrain[middleIndex]);
+
+            this.errors[middleIndex] = Math.max(this.errors[middleIndex], middleError);
+
+            if (i < this.rtin.numParentTriangles) { // bigger triangles; accumulate error with children
+                const leftChildIndex = ((ay + cy) >> 1) * size + ((ax + cx) >> 1);
+                const rightChildIndex = ((by + cy) >> 1) * size + ((bx + cx) >> 1);
+                this.errors[middleIndex] = Math.max(this.errors[middleIndex], this.errors[leftChildIndex], this.errors[rightChildIndex]);
+            }
+            if (isNaN(this.errors[middleIndex])) {
+               // console.log(this.terrain)
+            }
+        }
+    }
+
+
+    return terrain_mesh;
+
+},tge.mesh);
+
+
 /*./model.js*/
+
 
 
 
@@ -4593,7 +5016,7 @@ tge.model = $extend(function (proto,_super) {
         return (this.boundingSphereSize);
     }
 
-    function model(geo, material) {
+    function model(geo_mesh, material) {
         _super.apply(this);
         tge.flags.apply(this, arguments);
 
@@ -4612,8 +5035,14 @@ tge.model = $extend(function (proto,_super) {
         this.enabling = true;
 
         this.flags = tge.OBJECT_TYPES.STATIC_MODEL;
-        if (geo) {
-            this.addMesh(new tge.mesh(geo, material));
+        if (geo_mesh) {
+            if (geo_mesh.geo) {
+                this.addMesh(geo_mesh);
+            }
+            else {
+                this.addMesh(new tge.mesh(geo_mesh, material));
+            }
+            
         }
 
         return (this);
@@ -5568,7 +5997,7 @@ float lumaTL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0
 float lumaTR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, -1.0) * texCoordOffset)).xyz);
 float lumaBL = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(-1.0, 1.0) * texCoordOffset)).xyz);
 float lumaBR = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy + (vec2(1.0, 1.0) * texCoordOffset)).xyz);
-float lumaM= dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy).xyz);
+float lumaM = dot(luma, texture2D(tge_u_texture_input, tge_v_uv.xy).xyz);
 
 vec2 dir;
 dir.x = -((lumaTL + lumaTR) - (lumaBL + lumaBR));
@@ -5625,7 +6054,7 @@ tge.post_process.picture_adjustment = $extend(function (proto, _super) {
 
 void fragment(){
 vec4 c = texture2D(tge_u_texture_input, tge_v_uv);
-if (c.a > 0.0) {
+  if (c.a > 0.0) {
 
 float gamma=tge_u_pa_params[0].x;
 float contrast=tge_u_pa_params[0].y;
@@ -5635,19 +6064,19 @@ float red=tge_u_pa_params[1].y;
 float green=tge_u_pa_params[1].z;
 float blue=tge_u_pa_params[2].x;
 
-c.rgb /= c.a;
+    c.rgb /= c.a;
 
-vec3 rgb = pow(c.rgb, vec3(1. / gamma));
-rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
-rgb.r *= red;
-rgb.g *= green;
-rgb.b *= blue;
-c.rgb = rgb * brightness;
+    vec3 rgb = pow(c.rgb, vec3(1. / gamma));
+    rgb = mix(vec3(.5), mix(vec3(dot(vec3(.2125, .7154, .0721), rgb)), rgb, saturation), contrast);
+    rgb.r *= red;
+    rgb.g *= green;
+    rgb.b *= blue;
+    c.rgb = rgb * brightness;
 
-c.rgb *= c.a;
-}
+    c.rgb *= c.a;
+  }
 float alpha=tge_u_pa_params[2].y;
-gl_FragColor = c * alpha;
+  gl_FragColor = c * alpha;
 }
 `);
 
@@ -5697,7 +6126,7 @@ tge.post_process.glow = $extend(function (proto, _super) {
     var chunks = tge.shader.createChunksLib(`/*chunk-emission-filter*/
 uniform vec4 tge_u_brightThreshold;
 void fragment(){
- vec4 color = texture2D(tge_u_texture_input, tge_v_uv);
+ vec4 color = texture2D(tge_u_texture_input, tge_v_uv);    
  float luminance = dot(color.rgb, tge_u_brightThreshold.xyz );
  luminance+=(color.a+tge_u_brightThreshold.w);
  gl_FragColor = luminance* color;
@@ -5725,8 +6154,8 @@ void fragment(){
 vec4 cBase = texture2D(tge_u_texture_input, tge_v_uv);
 vec4 cOver = texture2D(tge_u_glow_emission, tge_v_uv);
 vec4 blend = cBase + cOver * tge_u_glow_params.z;
-blend = vec4(1.0) - exp(-blend * tge_u_glow_params.x);
-blend = pow(blend, vec4(1.0 / tge_u_glow_params.y));
+  blend = vec4(1.0) - exp(-blend * tge_u_glow_params.x);
+  blend = pow(blend, vec4(1.0 / tge_u_glow_params.y));
 gl_FragColor =blend;
 }`)
 
@@ -5973,11 +6402,7 @@ tge.engine = $extend(function (proto) {
         for (var i = 0; i < this.shaderParameters.fws_lightsCount; i++) {
             this.shadingLights[i] = null;
         }
-        this.frameTime = 0;
-        this.frameTimeDelta = 0;
-
-
-
+     
         this._defaultRenderTarget = new tge.rendertarget(gl, 10,10, true);
         this._defaultRenderTarget.clearBuffer = false;
 
@@ -5989,10 +6414,7 @@ tge.engine = $extend(function (proto) {
 
         this.post_processes = [];
 
-
-
-        this.tge_u_pipelineParams = tge.vec4();
-        
+                
         gl.enable(GL_DEPTH_TEST);
         gl.cullFace(GL_BACK);
         gl.enable(GL_CULL_FACE);
@@ -6015,7 +6437,7 @@ tge.engine = $extend(function (proto) {
         this.defaultRenderTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
         this.postProcessTarget.resize(this.gl.canvas.width, this.gl.canvas.height);
         for (var i = 0; i < this.post_processes.length; i++) {
-            this.post_processes[i].resize(this.gl.canvas.width, this.gl.canvas.height)
+            this.post_processes[i].resize(this.gl.canvas.width, this.gl.canvas.height);
         }
 
     };
@@ -6037,17 +6459,19 @@ tge.engine = $extend(function (proto) {
                 
                 tge.shader.compile(this.gl, shader, this.shaderParameters);
             }
-            this.gl.useProgram(shader.program);
-            shader.setUniform("tge_u_pipelineParams", this.tge_u_pipelineParams);
+            this.gl.useProgram(shader.program);            
             this.activeShader = shader;
             this.activeShader.cameraVersion = -1;
             this.lastShaderId = shader.uuid;
+            this.activeShader.used_geo_id = -1;
             return (true);
         }
         return (false);
     };
 
     proto.useMaterial = function (material, shader) {
+
+        shader = material.getShader(shader);
         if (this.useShader(shader)) {
             material.useShader(shader, this);
             return (true);
@@ -6095,9 +6519,10 @@ tge.engine = $extend(function (proto) {
         return function (geo) {
             if (!geo.compiled) tge.geometry.compile(this.gl, geo);
 
-            if (this.used_geo_id === geo.uuid) return;
-            this.used_geo_id = geo.uuid;
             shader = this.activeShader;
+            if (shader.used_geo_id === geo.uuid) return;
+            shader.used_geo_id = geo.uuid;
+           
             for (id in shader.attributes) {
                 if (geo.attributes[id]) {
                     updateGeomertyAttribute(this.gl, shader.attributes[id].location, geo.attributes[id]);
@@ -6108,14 +6533,6 @@ tge.engine = $extend(function (proto) {
             }
 
 
-
-            if (geo.indexData !== null) {
-                this.gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
-                if (geo.indexNeedsUpdate) {
-                    this.gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
-                    geo.indexNeedsUpdate = false;
-                }
-            }
         }
     })();
 
@@ -6299,16 +6716,6 @@ tge.engine = $extend(function (proto) {
             this.currentCamera = camera;
 
 
-
-            time = performance.now();
-            this.frameTimeDelta = this.frameTime - time;
-            this.frameTime = time;
-            this.lastShaderId = -1;
-
-
-            this.tge_u_pipelineParams[0] = this.frameTime;
-            this.tge_u_pipelineParams[1] = this.frameTimeDelta;
-
             _this = this;
 
             if (meshes.sorted !== true) {
@@ -6365,7 +6772,7 @@ tge.engine = $extend(function (proto) {
 
                 });
             }
-            //_this.disableFWRendering();
+            _this.disableFWRendering();
 
             for (i4 = 0; i4 < flatMeshes.length; i4++) {
                 mesh = flatMeshes[i4];
@@ -6419,7 +6826,7 @@ tge.engine = $extend(function (proto) {
 
 
 
-            _this.gl.enable(GL_CULL_FACE);
+           
         
             for (i4 = 0; i4 < transparentMeshes.length; i4++) {
                 mesh = transparentMeshes[i4];

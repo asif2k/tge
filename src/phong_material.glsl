@@ -1,5 +1,4 @@
 ﻿<?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 <?=chunk('mesh-attributes-all')?>
 <?=chunk('camera-matrix-all')?>
 <?=chunk('model-matrix-all')?>
@@ -10,8 +9,7 @@ varying vec2 tge_v_uv;
 varying vec3 tge_v_normal;
 
 
-void vertex(){
-	initPipelineParams();
+void vertex(){	
 	tge_v_shadow_vertex = tge_u_modelMatrix * vec4(tge_a_position,1.0);
 	gl_Position = tge_u_modelMatrix * vec4(tge_a_position, 1.0);
 	tge_v_normal = normalize(tge_u_modelMatrix * vec4(tge_a_normal,0.0)).xyz;
@@ -20,7 +18,6 @@ void vertex(){
 }
 
 <?=chunk('precision')?>
-<?=chunk('pipelineParams')?>
 <?=chunk('lights-material-all')?>
 <?=chunk('lights-matrix-all')?>
 
@@ -37,7 +34,6 @@ varying vec3 tge_v_normal;
 
 
 void fragment(void) {
-	initPipelineParams();
 	vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
 	<?for (var i = 0;i < param('fws_lightsCount');i++) {?>
 			fws_totalLight += fws_lighting(

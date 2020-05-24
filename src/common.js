@@ -139,7 +139,7 @@ function $eachindex(callback, index) {
     func(index || 0);
 }
 
-$mergesort = (function (array, comparefn) {
+var $mergesort = (function (array, comparefn) {
     var i, j, k
     function merge(arr, aux, lo, mid, hi, comparefn) {
         i = lo;
@@ -200,6 +200,21 @@ $mergesort = (function (array, comparefn) {
 
 
     return merge_sort;
+})();
+
+var $load_image_data = (function () {
+    var canv = $create_canvas(1, 1);
+    var img = new Image();
+    return function (url, cb,w,h) {
+        img.onload = function () {
+            canv.setSize(w || this.width, h || this.height);
+            canv.ctx.drawImage(this, 0, 0, canv.width, canv.height);
+            if (cb) cb(canv._getImageData().data);
+            canv._putImageData();
+        }
+        img.src = url;
+    }
+
 })();
 
 
@@ -265,7 +280,7 @@ $assign(tge, {
         SHADED: 4,
         CAST_SHADOW: 8,
         RECEIVE_SHADOW: 16,
-        CAST_REFLECTION: 32,
+        WIREFRAME: 32,
         RECEIVE_REFLECTION: 64,
         TRANSPARENT: 128,
         OPUQUE: 256,

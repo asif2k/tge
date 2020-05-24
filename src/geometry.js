@@ -14,6 +14,7 @@ tge.geometry = $extend(function (proto) {
     proto.setIndices = function (indices) {
         this.indexData = new Uint16Array(indices);
         this.numItems = this.indexData.length;
+        this.indexNeedsUpdate = true;
     };
     proto.prepareVerticesList = function (vertexSize) {
         vertexSize = vertexSize || 3;
@@ -95,12 +96,100 @@ tge.geometry = $extend(function (proto) {
         this.attributes = {};
         this.indexBuffer = null;
         this.indexData = null;
+        this.wireframe_index_data = null;
+        this.wireframe_index_buffer = null;
         this.indexNeedsUpdate = false;
         this.version = 0;
         this.size = tge.vec3();
         return (this);
 
     }
+
+    
+
+    geometry.activate_index = (function () {
+
+
+        var a, b, c, i, ii;
+        function update_wireframe_indices(geo) {
+            if (geo.wireframe_index_data === null) {
+                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+            } else if (geo.wireframe_index_data.length < geo.indexData.length * 2) {
+                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+            }
+
+            ii = 0;
+            for (i = 0; i < geo.indexData.length; i += 3) {
+                a = geo.indexData[i + 0];
+                b = geo.indexData[i + 1];
+                c = geo.indexData[i + 2];
+
+                geo.wireframe_index_data[ii] = a;
+                geo.wireframe_index_data[ii + 1] = b;
+                geo.wireframe_index_data[ii + 2] = b;
+                geo.wireframe_index_data[ii + 3] = c;
+                geo.wireframe_index_data[ii + 4] = c;
+                geo.wireframe_index_data[ii + 5] = a;
+                ii += 6;
+
+            }
+
+        }
+
+        return function (gl, geo,is_wireframe) {
+
+            if (geo.indexData !== null) {
+
+
+                if (is_wireframe) {
+                    if (geo.wireframe_index_buffer===null) {
+                        geo.wireframe_index_buffer = gl.createBuffer();
+                    }
+
+
+                    if (geo.indexNeedsUpdate) {
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
+
+                        update_wireframe_indices(geo);
+
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+
+
+                        geo.indexNeedsUpdate = false;
+                    }
+                    else {                        
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        if (geo.wireframe_index_data === null) {
+                            update_wireframe_indices(geo);
+                            gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+                        }
+                    }
+                }
+                else {
+
+                    if (geo.indexNeedsUpdate) {
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.indexData, GL_DYNAMIC_DRAW);
+
+                        geo.indexNeedsUpdate = false;
+                    }
+                    else gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.indexBuffer);
+
+
+
+                }
+
+              
+
+
+            }
+
+
+        }
+    })();
+
 
     geometry.compile = (function () {
 
@@ -125,21 +214,43 @@ tge.geometry = $extend(function (proto) {
 
         var id = null;
 
+        /*
+        var vv = [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1]
+        ];
+        var centers = new Float32Array(1000 * 3);
+        var ii = 0;
+        for (var i = 0; i < 1000; i++) {
+            ii = i % 3;
+            centers[i * 3 + 0] = vv[ii][0];
+            centers[i * 3 + 1] = vv[ii][1];
+            centers[i * 3 + 2] = vv[ii][2];
+        }
+
+        geometry.tge_a_center = {
+            dataType: GL_FLOAT,
+            itemSize: 3, data: centers, needsUpdate: true
+        };
+        */
 
 
-
+        /* default color buffer */
         geometry.tge_a_color = {
             dataType: GL_FLOAT,
             itemSize: 4, stride: 0, offset: 0, divisor: 0, array: null,
-            data: new Float32Array(60000)
+            data: new Float32Array(90000)
         };
         geometry.tge_a_color.data.fill(1);
 
         return function (gl, geo) {
 
-            if (!geometry.tge_a_color.dest) {
-                compileAttribute(gl, geometry.tge_a_color);
+            if (!tge.geometry.tge_a_color.dest) {
+                compileAttribute(gl, tge.geometry.tge_a_color);
+               // compileAttribute(gl, tge.geometry.tge_a_center);
             }
+
 
 
 
@@ -147,7 +258,8 @@ tge.geometry = $extend(function (proto) {
                 compileAttribute(gl, geo.attributes[id]);
             }
 
-            geo.attributes.tge_a_color = geo.attributes.tge_a_color || geometry.tge_a_color;
+            geo.attributes.tge_a_color = geo.attributes.tge_a_color || tge.geometry.tge_a_color;
+            geo.attributes.tge_a_center = geo.attributes.tge_a_center || tge.geometry.tge_a_center;
 
             if (geo.indexData) {
                 if (!geo.indexBuffer) geo.indexBuffer = gl.createBuffer();
@@ -190,15 +302,15 @@ tge.geometry = $extend(function (proto) {
 
 
 
-                tge.vec3.sub(v1v2, v2, v1);
-                tge.vec3.sub(v1v3, v3, v1);
+                tge.vec3.subtract(v1v2, v2, v1);
+                tge.vec3.subtract(v1v3, v3, v1);
                 tge.vec3.normalize(v1v2, v1v2);
                 tge.vec3.normalize(v1v3, v1v3);
                 tge.vec3.cross(normal, v1v2, v1v3);
                 tge.vec3.normalize(normal, normal);
 
                 weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
-                tge.vec3.sub(v2v3Alias, v3, v2);
+                tge.vec3.subtract(v2v3Alias, v3, v2);
                 tge.vec3.normalize(v2v3Alias, v2v3Alias);
                 weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
 
@@ -948,8 +1060,9 @@ tge.geometry = $extend(function (proto) {
     })();
 
     geometry.wavefront_obj_url = (function () {
-        var req = new XMLHttpRequest;
+        
         return function (url, done) {
+            var req = new XMLHttpRequest;
             if (done) {
                 req.open("GET", url, !0);
                 req.onload = function () {

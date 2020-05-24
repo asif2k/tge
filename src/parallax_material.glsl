@@ -21,8 +21,6 @@ varying vec2 tge_v_nm_uv;
 
 uniform vec4 tge_u_dispParams;
 void fragment(){
-   initPipelineParams();
-
 vec3 fws_directionToEye = normalize(tge_u_eyePosition.xyz - tge_v_shadow_vertex.xyz);
 
 float baseBias = tge_u_dispParams.x*0.5;
@@ -48,15 +46,4 @@ vec3 normal = normalize(tge_v_tbnMatrix * (2.0 * texture2D(tge_u_normalMap, uv).
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
 

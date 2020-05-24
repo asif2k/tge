@@ -35,7 +35,7 @@ function parseImportExport(text,  refFile) {
         console.log(m);
         content = processTextFile(m.replace(/import\(["'\s]|["'\s]\)/g, '').trim(), refFile).replace(/o\;\?/g, '');
         console.log(content);
-        content = content.replace(/  /g, '')
+        content = content.replace(/  /g, ' ')
             //.replace(/\r?\n|\r/g, '')
             .replace(/\t/g, '').replace(/\"/g, '\\"').replace(/o\;\?/g, '')
         text = text.replace(m, '`' + content + '`' );    

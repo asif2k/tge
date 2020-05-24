@@ -78,6 +78,18 @@ tge.material = $extend(function (proto,_super) {
     }
 
 
+    proto.getShader = function (shader) {
+        return shader;
+        if (this.wireframe) {
+            if (!shader.wireframe_shader) {
+                shader.wireframe_shader = tge.pipleline_shader.parse(tge.shader.$str("<?=chunk('wireframe_material')?>"), shader, true);                
+            }
+            return shader.wireframe_shader;
+        }
+
+        return shader;
+    }
+
     proto.renderMesh = function (engine, shader, mesh) {
 
         if (shader.setUniform("tge_u_objectMaterial", this.internalData)) {
@@ -118,11 +130,22 @@ tge.material = $extend(function (proto,_super) {
         engine.updateModelUniforms(mesh.model);
         mesh.drawCount = mesh.geo.numItems;
 
-        if (mesh.geo.indexData) {
-            engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
+        if (mesh.geo.indexData !== null) {
+            tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+            if (this.wireframe) {
+                engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_SHORT, mesh.drawOffset * 2);
+            }
+            else {
+                engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
+            }
         }
         else {
-            engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
+            if (this.wireframe) {
+                engine.gl.drawArrays(GL_LINES, mesh.drawOffset, mesh.drawCount);
+            }
+            else {
+                engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
+            }
         }
 
     }
@@ -366,9 +389,8 @@ tge.dynamic_skybox_material = $extend(function (proto, _super) {
         shader.setUniform("tge_u_viewProjectionMatrix", viewDirectionProjectionInverseMatrix);
         shader.setUniform("sun_params", this.sunPosition);
         engine.gl.depthFunc(GL_LEQUAL);
-
-
         engine.gl.drawArrays(this.drawType, 0, mesh.geo.numItems);
+
     };
     dynamic_skybox_material.shader = tge.pipleline_shader.parse(import('skybox_dynamic_material.glsl'));
 

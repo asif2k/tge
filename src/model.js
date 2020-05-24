@@ -1,5 +1,6 @@
 import * from './node.js'
 import * from './mesh.js'
+import * from './terrain.js'
 
 tge.model = $extend(function (proto,_super) {
     $assign(proto, tge.flags.prototype);
@@ -49,7 +50,7 @@ tge.model = $extend(function (proto,_super) {
         return (this.boundingSphereSize);
     }
 
-    function model(geo, material) {
+    function model(geo_mesh, material) {
         _super.apply(this);
         tge.flags.apply(this, arguments);
 
@@ -68,8 +69,14 @@ tge.model = $extend(function (proto,_super) {
         this.enabling = true;
 
         this.flags = tge.OBJECT_TYPES.STATIC_MODEL;
-        if (geo) {
-            this.addMesh(new tge.mesh(geo, material));
+        if (geo_mesh) {
+            if (geo_mesh.geo) {
+                this.addMesh(geo_mesh);
+            }
+            else {
+                this.addMesh(new tge.mesh(geo_mesh, material));
+            }
+            
         }
 
         return (this);
