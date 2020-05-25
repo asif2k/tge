@@ -12,7 +12,7 @@ tge.geometry = $extend(function (proto) {
         return (attribute);
     };
     proto.setIndices = function (indices) {
-        this.indexData = new Uint16Array(indices);
+        this.indexData = new Uint32Array(indices);
         this.numItems = this.indexData.length;
         this.indexNeedsUpdate = true;
     };
@@ -113,9 +113,9 @@ tge.geometry = $extend(function (proto) {
         var a, b, c, i, ii;
         function update_wireframe_indices(geo) {
             if (geo.wireframe_index_data === null) {
-                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+                geo.wireframe_index_data = new Uint32Array(geo.indexData.length * 2);
             } else if (geo.wireframe_index_data.length < geo.indexData.length * 2) {
-                geo.wireframe_index_data = new Uint16Array(geo.indexData.length * 2);
+                geo.wireframe_index_data = new Uint32Array(geo.indexData.length * 2);
             }
 
             ii = 0;

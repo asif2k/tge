@@ -14,11 +14,11 @@
       var sunLight = scene.addLight(new tge.light(), function (lg) {
         
         lg.setDiffuse(0.5, 0.5, 0.5);
-        lg.setAmbient(0.364338, 0.364338, 0.364338).setSpecular(0.385, 0.385, 0.385).setIntensity(1);
-        lg.setRotation(-0.613335132598877, 1, 0);
+        lg.setAmbient(0.36, 0.36, 0.36).setSpecular(0.38, 0.38, 0.38).setIntensity(1);
+        lg.setRotation(-0.61, 1, 0);
         lg.shadowMapSize = 2048;
-        lg.shadowCameraDistance = 10;
-        lg.castShadows = true;        
+        lg.shadowCameraDistance = 20;
+       // lg.castShadows = true;        
       });
 
       var sunPosition
@@ -29,63 +29,16 @@
 
       
       $load_image_data('textures/404.png', function (data) {
-        return
+
+        
         scene.addModel(new tge.model(new tge.terrain_mesh(257, data)), function (md, mesh) {
           console.log("terrain", mesh);
+          md.setRotation(-90 * tge.DEGTORAD, 0, 0);
           md.setScaling(20, 20, 20);
-        });
-      });
-
-      scene.addModel(new tge.model(tge.geometry.plane({ size: 400, divs: 4 }), new tge.parallax_material()), function (md, mesh) {
-        md.setPosition(0, -0.5, 0);
-        mesh.material.setAmbient(0.455, 0.455, 0.455).setSpecular(0, 0, 0);
-        tge.mat3.translateRotateScale(mesh.material.textureMatrix, 0, 0, 64, 64, 0);
-
-        tge.mat3.translateRotateScale(mesh.material.normalMapMatrix, 0, 0, 32, 32, 0);
-        mesh.material.normalMap = tge.texture.from_url('textures/nm1.jpg');
-        mesh.material.setFlag(tge.SHADING.RECEIVE_SHADOW); //.setAmbientRandom();
-        //mesh.material.ambientTexture = tge.texture.from_url('textures/tex4.jpg');
-        md.setRotation(-90 * tge.DEGTORAD, 0, 0);
-      });
-
-
-      
-      tge.geometry.wavefront_obj_url("models/lamp.obj", function (geo) {
-        scene.addModel(new tge.model(geo, new tge.material()), function (md, mesh) {
-          md.setPosition(7, 2, 0);
-          mesh.material.setAmbient(1, 1, 1);
-          //mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
           mesh.material.wireframe = true;
         });
-
-        scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
-          md.setPosition(-5, 2, -5);
-          mesh.material.setAmbient(0.5, 1, 0.5);
-          mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
-          // mesh.material.wireframe = true;
-        });
-
       });
 
-
-      tge.geometry.wavefront_obj_url("models/shuttle.obj", function (geo) {
-        scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
-          md.setPosition(6, 2, -5);
-          md.setScaling(0.5, 0.5, 0.5);
-          mesh.material.setAmbient(1, 1, 1);
-          mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
-          // mesh.material.wireframe = true;
-        });
-
-        scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
-          md.setPosition(-7, 2, 3);
-          md.setScaling(0.5, 0.5, 0.5);
-          mesh.material.setAmbient(0, 1, 1);
-          mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
-           mesh.material.wireframe = true;
-        });
-
-      });
 
 
       
@@ -112,10 +65,10 @@
           enabled:false
         }),
        
-
+        new tge.post_process.fxaa(),
 
       ];
-      // new tge.post_process.fxaa(),
+      // 
 
       app.playLoop(function (delta, time) {
         if (sunLight.version < 3) sunLight.version++;

@@ -13,11 +13,15 @@ tge.engine = $extend(function (proto) {
 
 
         // webgl state managerment
+        var pm1 = [null];
+        var pm2 = [null,null];
         gl.enable = (function (_super, gl) {
+            
             return function (state) {
                 if (gl.states[state] === true) return (false);
                 gl.states[state] = true;
-                _super.apply(gl, arguments);
+                pm1[0] = state;
+                _super.apply(gl, pm1);
                 return (true);
             }
         })(gl.enable, gl);
@@ -26,7 +30,8 @@ tge.engine = $extend(function (proto) {
             return function (state) {
                 if (gl.states[state] === false) return (false);
                 gl.states[state] = false;
-                _super.apply(gl, arguments);
+                pm1[0] = state;
+                _super.apply(gl, pm1);
                 return (true);
             }
         })(gl.disable, gl);
@@ -36,7 +41,9 @@ tge.engine = $extend(function (proto) {
                 if (gl.states.blendFunc0 !== func0 || gl.states.blendFunc1 !== func1) {
                     gl.states.blendFunc0 = func0;
                     gl.states.blendFunc1 = func1;
-                    _super.apply(gl, arguments);
+                    pm2[0] = func0;
+                    pm2[1] = func1;
+                    _super.apply(gl, pm2);
                     return (true);
                 }
                 return (false);
@@ -47,7 +54,8 @@ tge.engine = $extend(function (proto) {
             return function (param) {
                 if (gl.states.blendEQuation !== param) {
                     gl.states.blendEQuation = param;
-                    _super.apply(gl, arguments);
+                    pm1[0] = param;
+                    _super.apply(gl, pm1);
                 }
             }
         })(gl.blendEquation, gl);
@@ -56,7 +64,8 @@ tge.engine = $extend(function (proto) {
             return function (mask) {
                 if (mask !== gl.states.depthMask) {
                     gl.states.depthMask = mask;
-                    _super.apply(gl, arguments);
+                    pm1[0] = mask;
+                    _super.apply(gl, pm1);
                 }
             }
         })(gl.depthMask, gl);
@@ -65,7 +74,8 @@ tge.engine = $extend(function (proto) {
             return function (func) {
                 if (func !== gl.states.depthFunc) {
                     gl.states.depthFunc = func;
-                    _super.apply(gl, arguments);
+                    pm1[0] = func;
+                    _super.apply(gl, pm1);
                 }
             }
         })(gl.depthFunc, gl);
@@ -74,7 +84,8 @@ tge.engine = $extend(function (proto) {
             return function (param) {
                 if (param !== gl.states.cullFace) {
                     gl.states.cullFace = param;
-                    _super.apply(gl, arguments);
+                    pm1[0] = param;
+                    _super.apply(gl, pm1);
                 }
             }
         })(gl.cullFace, gl);
@@ -130,7 +141,7 @@ tge.engine = $extend(function (proto) {
         gl.OES_standard_derivatives = gl.getExtension("OES_standard_derivatives");
         gl.WEBGL_depth_texture = gl.getExtension('WEBGL_depth_texture');
         gl.ANGLE_instanced_arrays = gl.getExtension('ANGLE_instanced_arrays');
-
+        gl.OES_element_index_uint = gl.getExtension('OES_element_index_uint');
         setupGLState(gl);
 
         this.gl = gl;

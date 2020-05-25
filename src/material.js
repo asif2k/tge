@@ -133,15 +133,15 @@ tge.material = $extend(function (proto,_super) {
         if (mesh.geo.indexData !== null) {
             tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
             if (this.wireframe) {
-                engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_SHORT, mesh.drawOffset * 2);
+                engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_INT, mesh.drawOffset * 2);
             }
             else {
-                engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_SHORT, mesh.drawOffset);
+                engine.gl.drawElements(this.drawType, mesh.drawCount, GL_UNSIGNED_INT, mesh.drawOffset);
             }
         }
         else {
             if (this.wireframe) {
-                engine.gl.drawArrays(GL_LINES, mesh.drawOffset, mesh.drawCount);
+                engine.gl.drawArrays(GL_LINE_LOOP, mesh.drawOffset, mesh.drawCount);
             }
             else {
                 engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
