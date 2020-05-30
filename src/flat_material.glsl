@@ -16,7 +16,7 @@ void vertex(){
     gl_Position = tge_u_viewProjectionMatrix* tge_v_shadow_vertex;
 	tge_v_color= tge_a_color;	
 	tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
-	
+	gl_PointSize=10.0;
 }
 
 

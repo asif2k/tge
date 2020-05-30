@@ -8,6 +8,7 @@ tge.geometry = $extend(function (proto) {
         attribute.needsUpdate = attribute.needsUpdate || false;
         attribute.divisor = attribute.divisor || 0;
         attribute.array = attribute.array || null;
+        
         this.attributes[name] = attribute;
         return (attribute);
     };
@@ -61,7 +62,7 @@ tge.geometry = $extend(function (proto) {
             tempvec3[0] = this.attributes.tge_a_position.data[i];
             tempvec3[1] = this.attributes.tge_a_position.data[i + 1];
             tempvec3[2] = this.attributes.tge_a_position.data[i + 2];
-            Tge.vec3.transformMat4(tempvec3, tempvec3, mat4);
+            tge.vec3.transformMat4(tempvec3, tempvec3, mat4);
 
             this.attributes.tge_a_position.data[i] = tempvec3[0];
             this.attributes.tge_a_position.data[i + 1] = tempvec3[1];
@@ -81,7 +82,7 @@ tge.geometry = $extend(function (proto) {
 
     proto.scalePositionRotation = function (sx, sy, sz, x, y, z, rx, ry, rz) {
         return this.transform(
-            Tge.quat.toMatrixWithScale(tge.quat.rotateEular(tempquat, rx, ry, rz), tempmat4, [sx, sy, sz])
+            tge.quat.toMatrixWithScale(tge.quat.rotateEular(tempquat, rx, ry, rz), tempmat4, [sx, sy, sz])
 
         );
     };
@@ -135,14 +136,39 @@ tge.geometry = $extend(function (proto) {
             }
 
         }
+        var indices=[];
+        function update_wireframe_positions(geo) {            
+            indices.length = 0;
+            for (i = 0; i < (geo.attributes.tge_a_position.data.length / 3) - 1; i += 3) {
+                a = i + 0;
+                b = i + 1;
+                c = i + 2;
+
+                ii = indices.length;                
+                indices[ii] = a;
+                indices[ii + 1] = b;
+                indices[ii + 2] = b;
+                indices[ii + 3] = c;
+                indices[ii + 4] = c;
+                indices[ii + 5] = a;                
+
+
+
+            }
+
+            geo.wireframe_index_data = new Uint32Array(indices);
+            geo.wireframe_index_version = geo.attributes.tge_a_position.version;
+
+
+
+        }
 
         return function (gl, geo,is_wireframe) {
 
             if (geo.indexData !== null) {
 
-
                 if (is_wireframe) {
-                    if (geo.wireframe_index_buffer===null) {
+                    if (geo.wireframe_index_buffer === null) {
                         geo.wireframe_index_buffer = gl.createBuffer();
                     }
 
@@ -159,7 +185,7 @@ tge.geometry = $extend(function (proto) {
 
                         geo.indexNeedsUpdate = false;
                     }
-                    else {                        
+                    else {
                         gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
                         if (geo.wireframe_index_data === null) {
                             update_wireframe_indices(geo);
@@ -181,10 +207,40 @@ tge.geometry = $extend(function (proto) {
 
                 }
 
-              
+
 
 
             }
+            else {
+                if (is_wireframe) {
+                    if (geo.wireframe_index_buffer === null) {
+                        geo.wireframe_index_buffer = gl.createBuffer();
+                        update_wireframe_positions(geo);                        
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+
+                    }
+                    else {
+                        
+                        if (geo.wireframe_index_version !== geo.attributes.tge_a_position.version) {
+                            update_wireframe_positions(geo);
+                            gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                            gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+                        }
+                        else   gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        
+                    }
+
+                }
+
+
+
+
+            }
+
+
+
+
 
 
         }
@@ -203,7 +259,7 @@ tge.geometry = $extend(function (proto) {
             att.array = att.array || null;
             att.dataType = att.dataType || GL_FLOAT;
             att.bufferType = att.bufferType || GL_STATIC_DRAW;
-
+            att.version = att.version || 1;
             if (att.data) {
                 if (!att.dest) att.dest = gl.createBuffer();
                 gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
@@ -278,10 +334,17 @@ tge.geometry = $extend(function (proto) {
         var v1v2 = tge.vec3(), v1v3 = tge.vec3(), normal = tge.vec3();
         var v2v3Alias = tge.vec3(), v2v3Alias = tge.vec3();
 
-        return function (geo) {
+        return function (geo, flateFaces) {
 
             var vertices = geo.attributes.tge_a_position.data;
-            var normals = geo.attributes.tge_a_normal.data;
+            var normals
+            if (!geo.attributes.tge_a_normal) {
+                geo.addAttribute('tge_a_normal', {
+                    data: new Float32Array(vertices.length)
+                });
+            }
+
+            normals = geo.attributes.tge_a_normal.data;
             var indices = geo.indexData;
 
             normals.fill(0);
@@ -289,53 +352,99 @@ tge.geometry = $extend(function (proto) {
 
             var i1, i2, i3;
             var weight1, weight2;
-            for (var j = 0; j < indices.length; j += 3) {
-                i1 = indices[j];
-                i2 = indices[j + 1];
-                i3 = indices[j + 2];
+            var total = vertices.length;
+            var step = 9;
+            if (indices !== null) {
+                total = indices.length;
+                step = 3;
+            }
+            for (var j = 0; j < total; j += step) {
+                if (indices !== null) {
+                    i1 = indices[j];
+                    i2 = indices[j + 1];
+                    i3 = indices[j + 2];
+                    tge.vec3.set(v1, vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+                    tge.vec3.set(v2, vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+                    tge.vec3.set(v3, vertices[i3 * 3], vertices[i3 * 3 + 1], vertices[i3 * 3 + 2]);
+                }
+                else {
+                    tge.vec3.set(v1, vertices[j + 0], vertices[j + 1], vertices[j + 2]);
+                    tge.vec3.set(v2, vertices[j + 3], vertices[j + 4], vertices[j + 5]);
+                    tge.vec3.set(v3, vertices[j + 6], vertices[j + 7], vertices[j + 8]);
+                }
+                
+                
 
 
-                tge.vec3.set(v1, vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
-                tge.vec3.set(v2, vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
-                tge.vec3.set(v3, vertices[i3 * 3], vertices[i3 * 3 + 1], vertices[i3 * 3 + 2]);
+                tge.vec3.subtract(v1v2, v3, v2);
+                tge.vec3.subtract(v1v3, v1, v2);
+                
+                
+
+                
+
+                if (indices !== null) {
+                    i1 = i1 * 3;
+                    i2 = i2 * 3;
+                    i3 = i3 * 3;                    
+                }
+                else {
+                    i1 = j;
+                    i2 = j + 3;
+                    i3 = j + 6;
+                }
+
+                if (flateFaces) {
+                    tge.vec3.cross(normal, v1v2, v1v3);
+                    tge.vec3.normalize(v1v2, normal);
+                    normals[i1 + 0] += v1v2[0];
+                    normals[i1 + 1] += v1v2[1];
+                    normals[i1 + 2] += v1v2[2];
+                    
+                    normals[i2 + 0] += v1v2[0];
+                    normals[i2 + 1] += v1v2[1];
+                    normals[i2 + 2] += v1v2[2];
+                    
+                    normals[i3 + 0] += v1v2[0];
+                    normals[i3 + 1] += v1v2[1];
+                    normals[i3 + 2] += v1v2[2];
+                }
+                else {
+
+                    //tge.vec3.normalize(v1v2, v1v2);
+                    //tge.vec3.normalize(v1v3, v1v3);
+                    tge.vec3.cross(normal, v1v2, v1v3);
+                    //tge.vec3.normalize(normal, normal);
+                    tge.vec3.copy(v1v2, normal);
 
 
+                    //tge.vec3.subtract(v2v3Alias, v3, v2);
+                    //tge.vec3.normalize(v2v3Alias, v2v3Alias);
 
+                    //weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
+                   // weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
+                   // tge.vec3.scale(v1v2, normal, weight1);
+                    normals[i1 + 0] += v1v2[0];
+                    normals[i1 + 1] += v1v2[1];
+                    normals[i1 + 2] += v1v2[2];
+                   // tge.vec3.scale(v1v2, normal, weight2);
+                    normals[i2 + 0] += v1v2[0];
+                    normals[i2 + 1] += v1v2[1];
+                    normals[i2 + 2] += v1v2[2];
+                  //  tge.vec3.scale(v1v2, normal, Math.PI - weight1 - weight2);
+                    normals[i3 + 0] += v1v2[0];
+                    normals[i3 + 1] += v1v2[1];
+                    normals[i3 + 2] += v1v2[2];
+                }
+                
+                
 
-                tge.vec3.subtract(v1v2, v2, v1);
-                tge.vec3.subtract(v1v3, v3, v1);
-                tge.vec3.normalize(v1v2, v1v2);
-                tge.vec3.normalize(v1v3, v1v3);
-                tge.vec3.cross(normal, v1v2, v1v3);
-                tge.vec3.normalize(normal, normal);
-
-                weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
-                tge.vec3.subtract(v2v3Alias, v3, v2);
-                tge.vec3.normalize(v2v3Alias, v2v3Alias);
-                weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
-
-
-                i1 = i1 * 3;
-                i2 = i2 * 3;
-                i3 = i3 * 3;
-
-                tge.vec3.scale(v1v2, normal, weight1);
-                normals[i1 + 0] += v1v2[0];
-                normals[i1 + 1] += v1v2[1];
-                normals[i1 + 2] += v1v2[2];
-
-                tge.vec3.scale(v1v2, normal, weight2);
-                normals[i2 + 0] += v1v2[0];
-                normals[i2 + 1] += v1v2[1];
-                normals[i2 + 2] += v1v2[2];
-
-                tge.vec3.scale(v1v2, normal, Math.PI - weight1 - weight2);
-                normals[i3 + 0] += v1v2[0];
-                normals[i3 + 1] += v1v2[1];
-                normals[i3 + 2] += v1v2[2];
 
             }
 
+            if (!flateFaces) {
+                
+            }
             for (a = 0; a < normals.length; a += 3) {
                 tge.vec3.set(v1v2, normals[a], normals[a + 1], normals[a + 2]);
                 tge.vec3.normalize(normal, v1v2);
@@ -343,6 +452,54 @@ tge.geometry = $extend(function (proto) {
                 normals[a + 1] = normal[1];
                 normals[a + 2] = normal[2];
             }
+
+            
+        }
+    })();
+
+
+    geometry.indexed_to_flat = (function () {
+        var v1 = tge.vec3(), v2 = tge.vec3(), v3 = tge.vec3();        
+        var i1, i2, i3,j,vi;
+
+        var indices, vertices1, vertices2, normals1, normals2;
+        return function (geo) {
+            vertices1 = geo.attributes.tge_a_position.data;
+
+            indices = geo.indexData;
+            var g = new tge.geometry();
+            g.addAttribute("tge_a_position", {
+                data: new Float32Array(indices.length * 3)
+            });
+            vertices2 = g.attributes.tge_a_position.data;
+            g.numItems = vertices2.length / 3;
+            vi = 0;            
+            for (j = 0; j < indices.length; j += 3) {
+                i1 = indices[j];
+                i2 = indices[j + 1];
+                i3 = indices[j + 2];
+
+
+                vertices2[vi + 0] = vertices1[i1 * 3];
+                vertices2[vi + 1] = vertices1[i1 * 3 + 1];
+                vertices2[vi + 2] = vertices1[i1 * 3 + 2];
+
+                vertices2[vi + 3] = vertices1[i2 * 3];
+                vertices2[vi + 4] = vertices1[i2 * 3 + 1];
+                vertices2[vi + 5] = vertices1[i2 * 3 + 2];
+
+                vertices2[vi + 6] = vertices1[i3 * 3];
+                vertices2[vi + 7] = vertices1[i3 * 3 + 1];
+                vertices2[vi + 8] = vertices1[i3 * 3 + 2];               
+
+                vi += 9;
+
+
+
+            }
+
+            return g;
+
         }
     })();
 
@@ -462,7 +619,7 @@ tge.geometry = $extend(function (proto) {
 
 
     geometry.quad2D = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, -1,
@@ -482,7 +639,7 @@ tge.geometry = $extend(function (proto) {
     };
 
     geometry.skybox = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, -1,
@@ -502,7 +659,7 @@ tge.geometry = $extend(function (proto) {
 
 
     geometry.quad3D = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, 1, 0, 0, 0, 1, 0, 1,
@@ -636,12 +793,33 @@ tge.geometry = $extend(function (proto) {
         buildPlane(0, 1, 2, 1, - 1, width, height, depth, widthSegments, heightSegments, 4); // pz
         buildPlane(0, 1, 2, - 1, - 1, width, height, - depth, widthSegments, heightSegments, 5); // nz
 
+
+
+        
+        if (options.sphereRadius) {
+            for (ix = 0; ix < vertices.length; ix += 3) {
+                tge.vec3.set(tempvec3, vertices[ix], vertices[ix + 1], vertices[ix + 2]);
+                tge.vec3.normalize(tempvec3, tempvec3);
+                tge.vec3.scale(tempvec3, tempvec3, options.sphereRadius);
+                vertices[ix] = tempvec3[0];
+                vertices[ix + 1] = tempvec3[1];
+                vertices[ix + 2] = tempvec3[2];
+
+            }
+        
+        }
+
         var g = new tge.geometry();
 
         g.addAttribute("tge_a_position", { data: new Float32Array(vertices) });
         g.addAttribute("tge_a_normal", { data: new Float32Array(normals) });
         g.addAttribute("tge_a_uv", { data: new Float32Array(uvs), itemSize: 2 });
         g.addAttribute("tge_a_tangent", { data: new Float32Array(((vertices.length / 3) * 4)), itemSize: 4 });
+
+        if (options.sphereRadius) {
+            tge.geometry.calculate_normals(g,true);
+        }
+     
 
 
         g.setIndices(indices);
@@ -700,7 +878,9 @@ tge.geometry = $extend(function (proto) {
         }
 
 
-        g.setIndices((gridX * gridY) * 6);
+        //g.setIndices((gridX * gridY) * 6);
+        g.indexData = new Uint32Array((gridX * gridY) * 6);
+        g.indexNeedsUpdate = true;
         var positions = g.attributes.tge_a_position.data;
 
 
@@ -887,6 +1067,100 @@ tge.geometry = $extend(function (proto) {
         }
     })();
 
+    geometry.icosahedron = (function () {
+        var arr = [],ratio,scale;
+        return function (size) {
+            var g = new tge.geometry();
+
+            var t = (1 + Math.sqrt(5)) / 2;
+
+            arr.length = 0;
+            arr.push(- 1, t, 0, 1, t, 0, - 1, - t, 0, 1, - t, 0,
+                0, - 1, t, 0, 1, t, 0, - 1, - t, 0, 1, - t,
+                t, 0, - 1, t, 0, 1, - t, 0, - 1, - t, 0, 1);
+
+            g.addAttribute("tge_a_position", { data: new Float32Array(arr) });
+
+            g.geoType = "icosahedron";
+
+            arr.length = 0;
+
+            arr.push(0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
+                1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+                3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
+                4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1);
+
+
+
+            g.setIndices(arr);
+
+            return (g);
+
+
+            scale = size / Math.hypot(ratio, 1);
+
+                                  
+
+            //X plane
+            arr.push(ratio, 0, -scale);	//rf 0
+            arr.push(-ratio, 0, -scale);	//lf 1
+            arr.push(ratio, 0, scale);	//rb 2
+            arr.push(-ratio, 0, scale);	//lb 3 
+
+            //Y plane
+            arr.push(0, -scale, ratio);	//db 4
+            arr.push(0, -scale, -ratio);	//df 5
+            arr.push(0, scale, ratio);	//ub 6
+            arr.push(0, scale, -ratio);	//uf 7
+
+            //Z plane													 
+            arr.push(-scale, ratio, 0);	//lu 8
+            arr.push(-scale, -ratio, 0);	//ld 9
+            arr.push(scale, ratio, 0);	//ru 10
+            arr.push(scale, -ratio, 0);	//rd 11
+
+
+            g.addAttribute("tge_a_position", { data: new Float32Array(arr) });
+
+            g.geoType = "icosahedron";
+
+            arr.length = 0;
+
+            arr.push(1, 3, 8,
+                1, 3, 9,
+                0, 2, 10,
+                0, 2, 11,
+
+                5, 7, 0,
+                5, 7, 1,
+                4, 6, 2,
+                4, 6, 3,
+
+                9, 11, 4,
+                9, 11, 5,
+                8, 10, 6,
+                8, 10, 7,
+
+                1, 7, 8,
+                1, 5, 9,
+                0, 7, 10,
+                0, 5, 11,
+
+                3, 6, 8,
+                3, 4, 9,
+                2, 6, 10,
+                2, 4, 11);
+
+
+            g.setIndices(arr);
+
+            return (g);
+        }
+    })();
+
+
+
+
 
     geometry.line_geometry_builder = new function () {
 
@@ -896,8 +1170,28 @@ tge.geometry = $extend(function (proto) {
             this.vertices.length = 0;
         };
 
+        var xx, yy, zz;
+        var xs, ys, zs;
         this.add = function (x, y, z) {
+            xx = x; yy = y; zz = z;
             this.vertices.push(x, y, z);
+            return (this);
+        };
+        this.addTo = function (x, y, z) {
+            this.add(xx, yy, zz);
+            this.add(x, y, z);
+            return (this);
+        };
+
+        this.moveTo = function (x, y, z) {
+            xx = x; yy = y; zz = z;
+            xs = x; ys = y; zs = z;
+            return (this);
+        };
+
+        this.closePath = function () {
+            this.add(xx, yy, zz);
+            this.vertices.push(xs, ys, zs);
             return (this);
         };
 
@@ -1072,6 +1366,22 @@ tge.geometry = $extend(function (proto) {
             } 
         }
     })();
+
+    geometry.create = function (vertices, normals, uvs) {
+
+        var g = new tge.geometry();
+
+        if (vertices) {
+            g.addAttribute("tge_a_position", { data: vertices });
+            g.numItems = vertices.length / 3;
+        }
+
+        if (normals) {
+            g.addAttribute("tge_a_normal", { data: normals });
+        }
+       
+        return g;
+    }
 
     return geometry;
 

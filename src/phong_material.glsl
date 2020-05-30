@@ -15,6 +15,7 @@ void vertex(){
 	tge_v_normal = normalize(tge_u_modelMatrix * vec4(tge_a_normal,0.0)).xyz;
 	tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
 	gl_Position = tge_u_viewProjectionMatrix * tge_v_shadow_vertex;
+	gl_PointSize=10.0;
 }
 
 <?=chunk('precision')?>
@@ -43,6 +44,8 @@ void fragment(void) {
 				tge_u_lightMatrix<?=i?>[3].xyz - tge_v_shadow_vertex.xyz,
 				tge_u_lightMatrix<?=i?>[2].xyz);
 	<?}?>
+	
+	
 	gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * texture2D(tge_u_ambientTexture, tge_v_uv);
 	gl_FragColor.w*=tge_u_objectMaterial[0].w;
 

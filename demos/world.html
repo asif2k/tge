@@ -14,42 +14,67 @@
       var sunLight = scene.addLight(new tge.light(), function (lg) {
         
         lg.setDiffuse(0.5, 0.5, 0.5);
-        lg.setAmbient(0.36, 0.36, 0.36).setSpecular(0.38, 0.38, 0.38).setIntensity(1);
+        lg.setAmbient(0.636, 0.636, 0.636).setSpecular(0.38, 0.38, 0.38).setIntensity(1);
         lg.setRotation(-0.61, 1, 0);
         lg.shadowMapSize = 2048;
         lg.shadowCameraDistance = 20;
-       // lg.castShadows = true;        
+        //lg.castShadows = true;        
       });
 
+      
       var sunPosition
+      /*
       scene.addModel(new tge.model(tge.geometry.skybox(), new tge.dynamic_skybox_material()), function (md, mesh) {
         sunPosition = mesh.material.sunPosition;
 
       });
-
-      
-      $load_image_data('textures/404.png', function (data) {
-
+      */
+      var planet = scene.addModel(new tge.planet(), function (md, mesh) {
+        console.log(md);
+      });
+      $load_image_data('textures/heightmap11.jpg', function (data) {
+       
         
-        scene.addModel(new tge.model(new tge.terrain_mesh(257, data)), function (md, mesh) {
+        return;
+        tge.geometry.wavefront_obj_url("models/shuttle.obj", function (geo) {
+          scene.addModel(new tge.model(geo, new tge.phong_material()), function (md, mesh) {
+            tge.geometry.calculate_normals(mesh.geo, true);
+            md.setPosition(-12, 3, 0);
+            mesh.material.setFlag(tge.SHADING.CAST_SHADOW + tge.SHADING.RECEIVE_SHADOW);
+          });
+        });
+        
+        scene.addModel(new tge.model(new tge.terrain_mesh(256, data)), function (md, mesh) {
           console.log("terrain", mesh);
           md.setRotation(-90 * tge.DEGTORAD, 0, 0);
           md.setScaling(20, 20, 20);
+          mesh.material.setFlag(tge.SHADING.DOUBLE_SIDES);
           mesh.material.wireframe = true;
         });
-      });
+      },256,256);
 
 
+      var pm = new tge.perspective_camera(30, window.innerWidth / window.innerHeight, 0.2, 30);
+      scene.addModel(pm.getDisplay());
+      pm.setPosition(-21.22, 21.01, 46.77).setRotation(-0.40, -0.42, 0);
 
+      console.log("pm", pm);
       
       app.mouseDrage2 = (function (base) {
         return function (dx, dy, e) {
           if (!e.ctrlKey) return base.apply(this, arguments);
-          else sunLight.yawPitch(-dy * 0.001, -dx * 0.001);
+          else pm.yawPitch(-dy * 0.001, -dx * 0.001);
         }
       })(app.mouseDrage2);   
 
+      app.mouseWheel = (function (base) {
+        return function (sp, e) {
+          if (e.buttons === 2) pm.moveFrontBack(-0.005 * sp);
+          else base.apply(this, arguments);
+        }
+      })(app.mouseWheel);
 
+      
 
       camera.setPosition(-0.0260, 4.68, 11.60);
 
@@ -65,18 +90,24 @@
           enabled:false
         }),
        
-        new tge.post_process.fxaa(),
+        
 
       ];
-      // 
+      // new tge.post_process.fxaa(),
 
       app.playLoop(function (delta, time) {
         if (sunLight.version < 3) sunLight.version++;
 
 
-        sunPosition[0] = sunLight.fwVector[0];
-        sunPosition[1] = sunLight.fwVector[1];
-        sunPosition[2] = sunLight.fwVector[2];
+        if (sunPosition) {
+          sunPosition[0] = sunLight.fwVector[0];
+          sunPosition[1] = sunLight.fwVector[1];
+          sunPosition[2] = sunLight.fwVector[2];
+        }
+        if (pm.update()) {
+          planet.update_planet(pm);
+        }
+        
 
         if (camera.update()) {
           scene.renderList.meshes.sorted = false;

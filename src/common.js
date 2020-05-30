@@ -18,10 +18,11 @@ $smartarray = function () {
     this.length = 0;
     this.index = 0;
 
-    this.push = function (element) {
+    this.push = function (element) {        
         this.data[this.length++] = element;
     }
 
+    
     this.peek = function () {
         return this.data[this.length - 1];
     }
@@ -104,6 +105,46 @@ var $eventsystem = function () {
 
     });
 };
+
+
+var $maptypedarray = (function () {
+    var item_size, total_groups, i,contructor;
+    var contructors = {};
+
+    function setContructor(c) {
+        contructors['[object ' + c.name.toLowerCase()+']'] = c;
+    }
+    setContructor(Float32Array);
+    setContructor(Int32Array);
+    setContructor(Int16Array);
+    setContructor(Uint32Array);
+    setContructor(Uint16Array);
+    setContructor(Uint8Array);
+
+    console.log("contructors", contructors);
+
+    return function (arr,group_size) {
+        var groups = [];
+
+        
+        contructor = contructors[Object.prototype.toString.call(arr).toLowerCase()];
+
+        if (!contructor) {
+            console.error('invalid contructor', Object.prototype.toString.call(arr));
+        }
+        total_groups = arr.length / group_size;
+        item_size = arr.byteLength / arr.length;
+
+
+        for (i = 0; i < total_groups; i++) {
+            groups[i] = new contructor(arr.buffer, ((i * group_size) * item_size), group_size);
+        }
+
+        return groups;
+
+
+    }
+})();
 
 function $str (str, arg1, arg2, arg3, arg4, arg5) {
     str = "var arr=[];arr.push('" + str

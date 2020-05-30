@@ -6,7 +6,9 @@ tge.camera = $extend(function (proto, _super) {
 
 
     proto.getDisplay = function () {
-        var mod = new tge.model(tge.geometry.cube());
+        var g = tge.geometry.cube();
+        g.scaleAndPosition(0, 0, 0,0.5, 0.5, 0.5);
+        var mod = new tge.model(g);
         mod.parent = this;
         this.update();
         mod.flags = tge.OBJECT_TYPES.MANIPULATORS;
@@ -96,6 +98,46 @@ tge.camera = $extend(function (proto, _super) {
 
 
 tge.perspective_camera = $extend(function (proto, _super) {
+
+
+    proto.getDisplay = (function (proto_getDisplay) {
+        return function () {
+            var mod = proto_getDisplay.apply(this);
+
+
+            var halfHeight = Math.tan( (this.fov / 2.0));
+            var halfWidth = halfHeight * this.aspect;
+            var xn = halfWidth * this.near;
+            var xf = halfWidth * this.far;
+            var yn = halfHeight * this.near;
+            var yf = halfHeight * this.far;
+
+
+            var b = tge.geometry.line_geometry_builder;
+            b.clear();
+            b.add(-xn, -yn, -this.near).add(-xf, -yf, -this.far);
+            b.add(xn, -yn, -this.near).add(xf, -yf, -this.far);
+
+            b.add(-xn, yn, -this.near).add(-xf, yf, -this.far);
+            b.add(xn, yn, -this.near).add(xf, yf, -this.far);
+            
+            b.add(-xf, yf, -this.far).add(xf, yf, -this.far);
+            b.add(-xf, -yf, -this.far).add(xf, -yf, -this.far);
+
+
+            b.add(-xf, -yf, -this.far).add(-xf, yf, -this.far);
+            b.add(xf, -yf, -this.far).add(xf, yf, -this.far);
+            
+                            
+                
+
+            mod.addMesh(new tge.mesh(b.build(), tge.material.LinesSelected));
+
+            return mod;
+        }
+    })(proto.getDisplay);
+
+
 
     function perspective_camera(fov, aspect, near, far) {
         _super.apply(this, arguments);

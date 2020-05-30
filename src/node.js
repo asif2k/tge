@@ -20,12 +20,44 @@ tge.node = $extend(function (proto) {
 
         tge.vec3.set(this.scale, 1, 1, 1);
 
-        this.position = new Float32Array(this.matrix.buffer,  (12 * 4), 3);
+        this.position = new Float32Array(this.matrix.buffer, (12 * 4), 3);
+
+        this.upVector = new Float32Array(this.matrix.buffer, (4 * 4), 3);
+        this.fwVector = new Float32Array(this.matrix.buffer, (8 * 4), 3);
+        this.sdVector = new Float32Array(this.matrix.buffer, 0, 3);
+
        return (this);
 
 
     }
-
+    proto.setRotation = function (x, y, z) {
+        this.rotation[0] = x;
+        this.rotation[1] = y;
+        this.rotation[2] = z;
+        this.rotationNeedUpdate = true;
+        return this;
+    }
+    proto.setScaling = function (x, y, z) {
+        this.scale[0] = x;
+        this.scale[1] = y;
+        this.scale[2] = z;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
+    proto.setScalingUnit = function (x) {
+        this.scale[0] = x;
+        this.scale[1] = x;
+        this.scale[2] = x;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
+    proto.setPosition = function (x, y, z) {
+        this.position[0] = x;
+        this.position[1] = y;
+        this.position[2] = z;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
     proto.update = function () {
         this.enabling = this.enabled;
         return this.updateMatrix()
@@ -79,30 +111,7 @@ tge.transfrom_node = $extend(function (proto,_super) {
     proto.yawPitch = function (dx, dy) {
         this.setRotation(this.rotation[0] + dx, this.rotation[1] + dy, this.rotation[2]);
     }
-    proto.setRotation = function (x, y, z) {
-        this.rotation[0] = x;
-        this.rotation[1] = y;
-        this.rotation[2] = z;
-        this.rotationNeedUpdate = true;
-    }
-    proto.setScaling = function (x, y, z) {
-        this.scale[0] = x;
-        this.scale[1] = y;
-        this.scale[2] = z;
-        this.matrixNeedUpdate = true;
-    }
-    proto.setScalingUnit = function (x) {
-        this.scale[0] = x;
-        this.scale[1] = x;
-        this.scale[2] = x;
-        this.matrixNeedUpdate = true;
-    }
-    proto.setPosition = function (x, y, z) {
-        this.position[0] = x;
-        this.position[1] = y;
-        this.position[2] = z;
-        this.matrixNeedUpdate = true;
-    }
+   
 
     proto.moveFrontBack = function (sp) {
         this.matrix[12] += this.fwVector[0] * sp;

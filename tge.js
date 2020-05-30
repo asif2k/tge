@@ -21,10 +21,11 @@ $smartarray = function () {
     this.length = 0;
     this.index = 0;
 
-    this.push = function (element) {
+    this.push = function (element) {        
         this.data[this.length++] = element;
     }
 
+    
     this.peek = function () {
         return this.data[this.length - 1];
     }
@@ -107,6 +108,46 @@ var $eventsystem = function () {
 
     });
 };
+
+
+var $maptypedarray = (function () {
+    var item_size, total_groups, i,contructor;
+    var contructors = {};
+
+    function setContructor(c) {
+        contructors['[object ' + c.name.toLowerCase()+']'] = c;
+    }
+    setContructor(Float32Array);
+    setContructor(Int32Array);
+    setContructor(Int16Array);
+    setContructor(Uint32Array);
+    setContructor(Uint16Array);
+    setContructor(Uint8Array);
+
+    console.log("contructors", contructors);
+
+    return function (arr,group_size) {
+        var groups = [];
+
+        
+        contructor = contructors[Object.prototype.toString.call(arr).toLowerCase()];
+
+        if (!contructor) {
+            console.error('invalid contructor', Object.prototype.toString.call(arr));
+        }
+        total_groups = arr.length / group_size;
+        item_size = arr.byteLength / arr.length;
+
+
+        for (i = 0; i < total_groups; i++) {
+            groups[i] = new contructor(arr.buffer, ((i * group_size) * item_size), group_size);
+        }
+
+        return groups;
+
+
+    }
+})();
 
 function $str (str, arg1, arg2, arg3, arg4, arg5) {
     str = "var arr=[];arr.push('" + str
@@ -376,6 +417,11 @@ tge.createFloat32 = (function (len, creator) {
     tge.Epsilon = 1.192092896e-012;
     tge.ZeroEpsilonSq = tge.Epsilon * tge.Epsilon;
 
+
+    Math.clamp = Math.clamp || function (v, l, h) {
+        return Math.max(Math.min(v, h), l);
+    };
+
     tge.vec2 = tge.createFloat32(2);
     $assign(tge.vec2, {
         clone: function (a) {
@@ -573,6 +619,29 @@ tge.createFloat32 = (function (len, creator) {
         },
         distance: function (a, b) {
             return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        },
+        scaleAndAdd: function (out, a, b, scale) {
+            out[0] = a[0] + (b[0] * scale);
+            out[1] = a[1] + (b[1] * scale);
+            out[2] = a[2] + (b[2] * scale);
+            return out;
+        },
+        transformMat4: function (out, a, m) {
+            x = a[0]; y = a[1]; z = a[2];
+            out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]);
+            out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]);
+            out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]);
+
+            return out;
+        },
+        lerp: function (out, a, b, l) {
+            out[0] = a[0] + (b[0] - a[0]) * l;
+            out[1] = a[1] + (b[1] - a[1]) * l;
+            out[2] = a[2] + (b[2] - a[2]) * l;
+
+
+
+            return out;
         },
     });
 
@@ -1728,6 +1797,7 @@ tge.geometry = $extend(function (proto) {
         attribute.needsUpdate = attribute.needsUpdate || false;
         attribute.divisor = attribute.divisor || 0;
         attribute.array = attribute.array || null;
+        
         this.attributes[name] = attribute;
         return (attribute);
     };
@@ -1781,7 +1851,7 @@ tge.geometry = $extend(function (proto) {
             tempvec3[0] = this.attributes.tge_a_position.data[i];
             tempvec3[1] = this.attributes.tge_a_position.data[i + 1];
             tempvec3[2] = this.attributes.tge_a_position.data[i + 2];
-            Tge.vec3.transformMat4(tempvec3, tempvec3, mat4);
+            tge.vec3.transformMat4(tempvec3, tempvec3, mat4);
 
             this.attributes.tge_a_position.data[i] = tempvec3[0];
             this.attributes.tge_a_position.data[i + 1] = tempvec3[1];
@@ -1801,7 +1871,7 @@ tge.geometry = $extend(function (proto) {
 
     proto.scalePositionRotation = function (sx, sy, sz, x, y, z, rx, ry, rz) {
         return this.transform(
-            Tge.quat.toMatrixWithScale(tge.quat.rotateEular(tempquat, rx, ry, rz), tempmat4, [sx, sy, sz])
+            tge.quat.toMatrixWithScale(tge.quat.rotateEular(tempquat, rx, ry, rz), tempmat4, [sx, sy, sz])
 
         );
     };
@@ -1855,14 +1925,39 @@ tge.geometry = $extend(function (proto) {
             }
 
         }
+        var indices=[];
+        function update_wireframe_positions(geo) {            
+            indices.length = 0;
+            for (i = 0; i < (geo.attributes.tge_a_position.data.length / 3) - 1; i += 3) {
+                a = i + 0;
+                b = i + 1;
+                c = i + 2;
+
+                ii = indices.length;                
+                indices[ii] = a;
+                indices[ii + 1] = b;
+                indices[ii + 2] = b;
+                indices[ii + 3] = c;
+                indices[ii + 4] = c;
+                indices[ii + 5] = a;                
+
+
+
+            }
+
+            geo.wireframe_index_data = new Uint32Array(indices);
+            geo.wireframe_index_version = geo.attributes.tge_a_position.version;
+
+
+
+        }
 
         return function (gl, geo,is_wireframe) {
 
             if (geo.indexData !== null) {
 
-
                 if (is_wireframe) {
-                    if (geo.wireframe_index_buffer===null) {
+                    if (geo.wireframe_index_buffer === null) {
                         geo.wireframe_index_buffer = gl.createBuffer();
                     }
 
@@ -1879,7 +1974,7 @@ tge.geometry = $extend(function (proto) {
 
                         geo.indexNeedsUpdate = false;
                     }
-                    else {                        
+                    else {
                         gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
                         if (geo.wireframe_index_data === null) {
                             update_wireframe_indices(geo);
@@ -1901,10 +1996,40 @@ tge.geometry = $extend(function (proto) {
 
                 }
 
-              
+
 
 
             }
+            else {
+                if (is_wireframe) {
+                    if (geo.wireframe_index_buffer === null) {
+                        geo.wireframe_index_buffer = gl.createBuffer();
+                        update_wireframe_positions(geo);                        
+                        gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+
+                    }
+                    else {
+                        
+                        if (geo.wireframe_index_version !== geo.attributes.tge_a_position.version) {
+                            update_wireframe_positions(geo);
+                            gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                            gl.bufferData(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_data, GL_DYNAMIC_DRAW);
+                        }
+                        else   gl.bindBuffer(GL_ELEMENT_ARRAY_BUFFER, geo.wireframe_index_buffer);
+                        
+                    }
+
+                }
+
+
+
+
+            }
+
+
+
+
 
 
         }
@@ -1923,7 +2048,7 @@ tge.geometry = $extend(function (proto) {
             att.array = att.array || null;
             att.dataType = att.dataType || GL_FLOAT;
             att.bufferType = att.bufferType || GL_STATIC_DRAW;
-
+            att.version = att.version || 1;
             if (att.data) {
                 if (!att.dest) att.dest = gl.createBuffer();
                 gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
@@ -1998,10 +2123,17 @@ tge.geometry = $extend(function (proto) {
         var v1v2 = tge.vec3(), v1v3 = tge.vec3(), normal = tge.vec3();
         var v2v3Alias = tge.vec3(), v2v3Alias = tge.vec3();
 
-        return function (geo) {
+        return function (geo, flateFaces) {
 
             var vertices = geo.attributes.tge_a_position.data;
-            var normals = geo.attributes.tge_a_normal.data;
+            var normals
+            if (!geo.attributes.tge_a_normal) {
+                geo.addAttribute('tge_a_normal', {
+                    data: new Float32Array(vertices.length)
+                });
+            }
+
+            normals = geo.attributes.tge_a_normal.data;
             var indices = geo.indexData;
 
             normals.fill(0);
@@ -2009,53 +2141,99 @@ tge.geometry = $extend(function (proto) {
 
             var i1, i2, i3;
             var weight1, weight2;
-            for (var j = 0; j < indices.length; j += 3) {
-                i1 = indices[j];
-                i2 = indices[j + 1];
-                i3 = indices[j + 2];
+            var total = vertices.length;
+            var step = 9;
+            if (indices !== null) {
+                total = indices.length;
+                step = 3;
+            }
+            for (var j = 0; j < total; j += step) {
+                if (indices !== null) {
+                    i1 = indices[j];
+                    i2 = indices[j + 1];
+                    i3 = indices[j + 2];
+                    tge.vec3.set(v1, vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
+                    tge.vec3.set(v2, vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
+                    tge.vec3.set(v3, vertices[i3 * 3], vertices[i3 * 3 + 1], vertices[i3 * 3 + 2]);
+                }
+                else {
+                    tge.vec3.set(v1, vertices[j + 0], vertices[j + 1], vertices[j + 2]);
+                    tge.vec3.set(v2, vertices[j + 3], vertices[j + 4], vertices[j + 5]);
+                    tge.vec3.set(v3, vertices[j + 6], vertices[j + 7], vertices[j + 8]);
+                }
+                
+                
 
 
-                tge.vec3.set(v1, vertices[i1 * 3], vertices[i1 * 3 + 1], vertices[i1 * 3 + 2]);
-                tge.vec3.set(v2, vertices[i2 * 3], vertices[i2 * 3 + 1], vertices[i2 * 3 + 2]);
-                tge.vec3.set(v3, vertices[i3 * 3], vertices[i3 * 3 + 1], vertices[i3 * 3 + 2]);
+                tge.vec3.subtract(v1v2, v3, v2);
+                tge.vec3.subtract(v1v3, v1, v2);
+                
+                
+
+                
+
+                if (indices !== null) {
+                    i1 = i1 * 3;
+                    i2 = i2 * 3;
+                    i3 = i3 * 3;                    
+                }
+                else {
+                    i1 = j;
+                    i2 = j + 3;
+                    i3 = j + 6;
+                }
+
+                if (flateFaces) {
+                    tge.vec3.cross(normal, v1v2, v1v3);
+                    tge.vec3.normalize(v1v2, normal);
+                    normals[i1 + 0] += v1v2[0];
+                    normals[i1 + 1] += v1v2[1];
+                    normals[i1 + 2] += v1v2[2];
+                    
+                    normals[i2 + 0] += v1v2[0];
+                    normals[i2 + 1] += v1v2[1];
+                    normals[i2 + 2] += v1v2[2];
+                    
+                    normals[i3 + 0] += v1v2[0];
+                    normals[i3 + 1] += v1v2[1];
+                    normals[i3 + 2] += v1v2[2];
+                }
+                else {
+
+                    //tge.vec3.normalize(v1v2, v1v2);
+                    //tge.vec3.normalize(v1v3, v1v3);
+                    tge.vec3.cross(normal, v1v2, v1v3);
+                    //tge.vec3.normalize(normal, normal);
+                    tge.vec3.copy(v1v2, normal);
 
 
+                    //tge.vec3.subtract(v2v3Alias, v3, v2);
+                    //tge.vec3.normalize(v2v3Alias, v2v3Alias);
 
+                    //weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
+                   // weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
+                   // tge.vec3.scale(v1v2, normal, weight1);
+                    normals[i1 + 0] += v1v2[0];
+                    normals[i1 + 1] += v1v2[1];
+                    normals[i1 + 2] += v1v2[2];
+                   // tge.vec3.scale(v1v2, normal, weight2);
+                    normals[i2 + 0] += v1v2[0];
+                    normals[i2 + 1] += v1v2[1];
+                    normals[i2 + 2] += v1v2[2];
+                  //  tge.vec3.scale(v1v2, normal, Math.PI - weight1 - weight2);
+                    normals[i3 + 0] += v1v2[0];
+                    normals[i3 + 1] += v1v2[1];
+                    normals[i3 + 2] += v1v2[2];
+                }
+                
+                
 
-                tge.vec3.subtract(v1v2, v2, v1);
-                tge.vec3.subtract(v1v3, v3, v1);
-                tge.vec3.normalize(v1v2, v1v2);
-                tge.vec3.normalize(v1v3, v1v3);
-                tge.vec3.cross(normal, v1v2, v1v3);
-                tge.vec3.normalize(normal, normal);
-
-                weight1 = Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v1v3))));
-                tge.vec3.subtract(v2v3Alias, v3, v2);
-                tge.vec3.normalize(v2v3Alias, v2v3Alias);
-                weight2 = Math.PI - Math.acos(Math.max(-1, Math.min(1, tge.vec3.dot(v1v2, v2v3Alias))));
-
-
-                i1 = i1 * 3;
-                i2 = i2 * 3;
-                i3 = i3 * 3;
-
-                tge.vec3.scale(v1v2, normal, weight1);
-                normals[i1 + 0] += v1v2[0];
-                normals[i1 + 1] += v1v2[1];
-                normals[i1 + 2] += v1v2[2];
-
-                tge.vec3.scale(v1v2, normal, weight2);
-                normals[i2 + 0] += v1v2[0];
-                normals[i2 + 1] += v1v2[1];
-                normals[i2 + 2] += v1v2[2];
-
-                tge.vec3.scale(v1v2, normal, Math.PI - weight1 - weight2);
-                normals[i3 + 0] += v1v2[0];
-                normals[i3 + 1] += v1v2[1];
-                normals[i3 + 2] += v1v2[2];
 
             }
 
+            if (!flateFaces) {
+                
+            }
             for (a = 0; a < normals.length; a += 3) {
                 tge.vec3.set(v1v2, normals[a], normals[a + 1], normals[a + 2]);
                 tge.vec3.normalize(normal, v1v2);
@@ -2063,6 +2241,54 @@ tge.geometry = $extend(function (proto) {
                 normals[a + 1] = normal[1];
                 normals[a + 2] = normal[2];
             }
+
+            
+        }
+    })();
+
+
+    geometry.indexed_to_flat = (function () {
+        var v1 = tge.vec3(), v2 = tge.vec3(), v3 = tge.vec3();        
+        var i1, i2, i3,j,vi;
+
+        var indices, vertices1, vertices2, normals1, normals2;
+        return function (geo) {
+            vertices1 = geo.attributes.tge_a_position.data;
+
+            indices = geo.indexData;
+            var g = new tge.geometry();
+            g.addAttribute("tge_a_position", {
+                data: new Float32Array(indices.length * 3)
+            });
+            vertices2 = g.attributes.tge_a_position.data;
+            g.numItems = vertices2.length / 3;
+            vi = 0;            
+            for (j = 0; j < indices.length; j += 3) {
+                i1 = indices[j];
+                i2 = indices[j + 1];
+                i3 = indices[j + 2];
+
+
+                vertices2[vi + 0] = vertices1[i1 * 3];
+                vertices2[vi + 1] = vertices1[i1 * 3 + 1];
+                vertices2[vi + 2] = vertices1[i1 * 3 + 2];
+
+                vertices2[vi + 3] = vertices1[i2 * 3];
+                vertices2[vi + 4] = vertices1[i2 * 3 + 1];
+                vertices2[vi + 5] = vertices1[i2 * 3 + 2];
+
+                vertices2[vi + 6] = vertices1[i3 * 3];
+                vertices2[vi + 7] = vertices1[i3 * 3 + 1];
+                vertices2[vi + 8] = vertices1[i3 * 3 + 2];               
+
+                vi += 9;
+
+
+
+            }
+
+            return g;
+
         }
     })();
 
@@ -2182,7 +2408,7 @@ tge.geometry = $extend(function (proto) {
 
 
     geometry.quad2D = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, -1,
@@ -2202,7 +2428,7 @@ tge.geometry = $extend(function (proto) {
     };
 
     geometry.skybox = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, -1,
@@ -2222,7 +2448,7 @@ tge.geometry = $extend(function (proto) {
 
 
     geometry.quad3D = function () {
-        var g = new geometry();
+        var g = new tge.geometry();
         g.addAttribute("tge_a_position", {
             data: new Float32Array([
                 -1, 1, 0, 0, 0, 1, 0, 1,
@@ -2356,12 +2582,33 @@ tge.geometry = $extend(function (proto) {
         buildPlane(0, 1, 2, 1, - 1, width, height, depth, widthSegments, heightSegments, 4); // pz
         buildPlane(0, 1, 2, - 1, - 1, width, height, - depth, widthSegments, heightSegments, 5); // nz
 
+
+
+        
+        if (options.sphereRadius) {
+            for (ix = 0; ix < vertices.length; ix += 3) {
+                tge.vec3.set(tempvec3, vertices[ix], vertices[ix + 1], vertices[ix + 2]);
+                tge.vec3.normalize(tempvec3, tempvec3);
+                tge.vec3.scale(tempvec3, tempvec3, options.sphereRadius);
+                vertices[ix] = tempvec3[0];
+                vertices[ix + 1] = tempvec3[1];
+                vertices[ix + 2] = tempvec3[2];
+
+            }
+        
+        }
+
         var g = new tge.geometry();
 
         g.addAttribute("tge_a_position", { data: new Float32Array(vertices) });
         g.addAttribute("tge_a_normal", { data: new Float32Array(normals) });
         g.addAttribute("tge_a_uv", { data: new Float32Array(uvs), itemSize: 2 });
         g.addAttribute("tge_a_tangent", { data: new Float32Array(((vertices.length / 3) * 4)), itemSize: 4 });
+
+        if (options.sphereRadius) {
+            tge.geometry.calculate_normals(g,true);
+        }
+     
 
 
         g.setIndices(indices);
@@ -2420,7 +2667,9 @@ tge.geometry = $extend(function (proto) {
         }
 
 
-        g.setIndices((gridX * gridY) * 6);
+        //g.setIndices((gridX * gridY) * 6);
+        g.indexData = new Uint32Array((gridX * gridY) * 6);
+        g.indexNeedsUpdate = true;
         var positions = g.attributes.tge_a_position.data;
 
 
@@ -2607,6 +2856,100 @@ tge.geometry = $extend(function (proto) {
         }
     })();
 
+    geometry.icosahedron = (function () {
+        var arr = [],ratio,scale;
+        return function (size) {
+            var g = new tge.geometry();
+
+            var t = (1 + Math.sqrt(5)) / 2;
+
+            arr.length = 0;
+            arr.push(- 1, t, 0, 1, t, 0, - 1, - t, 0, 1, - t, 0,
+                0, - 1, t, 0, 1, t, 0, - 1, - t, 0, 1, - t,
+                t, 0, - 1, t, 0, 1, - t, 0, - 1, - t, 0, 1);
+
+            g.addAttribute("tge_a_position", { data: new Float32Array(arr) });
+
+            g.geoType = "icosahedron";
+
+            arr.length = 0;
+
+            arr.push(0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
+                1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+                3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
+                4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1);
+
+
+
+            g.setIndices(arr);
+
+            return (g);
+
+
+            scale = size / Math.hypot(ratio, 1);
+
+                                  
+
+            //X plane
+            arr.push(ratio, 0, -scale);	//rf 0
+            arr.push(-ratio, 0, -scale);	//lf 1
+            arr.push(ratio, 0, scale);	//rb 2
+            arr.push(-ratio, 0, scale);	//lb 3 
+
+            //Y plane
+            arr.push(0, -scale, ratio);	//db 4
+            arr.push(0, -scale, -ratio);	//df 5
+            arr.push(0, scale, ratio);	//ub 6
+            arr.push(0, scale, -ratio);	//uf 7
+
+            //Z plane													 
+            arr.push(-scale, ratio, 0);	//lu 8
+            arr.push(-scale, -ratio, 0);	//ld 9
+            arr.push(scale, ratio, 0);	//ru 10
+            arr.push(scale, -ratio, 0);	//rd 11
+
+
+            g.addAttribute("tge_a_position", { data: new Float32Array(arr) });
+
+            g.geoType = "icosahedron";
+
+            arr.length = 0;
+
+            arr.push(1, 3, 8,
+                1, 3, 9,
+                0, 2, 10,
+                0, 2, 11,
+
+                5, 7, 0,
+                5, 7, 1,
+                4, 6, 2,
+                4, 6, 3,
+
+                9, 11, 4,
+                9, 11, 5,
+                8, 10, 6,
+                8, 10, 7,
+
+                1, 7, 8,
+                1, 5, 9,
+                0, 7, 10,
+                0, 5, 11,
+
+                3, 6, 8,
+                3, 4, 9,
+                2, 6, 10,
+                2, 4, 11);
+
+
+            g.setIndices(arr);
+
+            return (g);
+        }
+    })();
+
+
+
+
 
     geometry.line_geometry_builder = new function () {
 
@@ -2616,8 +2959,28 @@ tge.geometry = $extend(function (proto) {
             this.vertices.length = 0;
         };
 
+        var xx, yy, zz;
+        var xs, ys, zs;
         this.add = function (x, y, z) {
+            xx = x; yy = y; zz = z;
             this.vertices.push(x, y, z);
+            return (this);
+        };
+        this.addTo = function (x, y, z) {
+            this.add(xx, yy, zz);
+            this.add(x, y, z);
+            return (this);
+        };
+
+        this.moveTo = function (x, y, z) {
+            xx = x; yy = y; zz = z;
+            xs = x; ys = y; zs = z;
+            return (this);
+        };
+
+        this.closePath = function () {
+            this.add(xx, yy, zz);
+            this.vertices.push(xs, ys, zs);
             return (this);
         };
 
@@ -2792,6 +3155,22 @@ tge.geometry = $extend(function (proto) {
             } 
         }
     })();
+
+    geometry.create = function (vertices, normals, uvs) {
+
+        var g = new tge.geometry();
+
+        if (vertices) {
+            g.addAttribute("tge_a_position", { data: vertices });
+            g.numItems = vertices.length / 3;
+        }
+
+        if (normals) {
+            g.addAttribute("tge_a_normal", { data: normals });
+        }
+       
+        return g;
+    }
 
     return geometry;
 
@@ -3349,12 +3728,44 @@ tge.node = $extend(function (proto) {
 
         tge.vec3.set(this.scale, 1, 1, 1);
 
-        this.position = new Float32Array(this.matrix.buffer,  (12 * 4), 3);
+        this.position = new Float32Array(this.matrix.buffer, (12 * 4), 3);
+
+        this.upVector = new Float32Array(this.matrix.buffer, (4 * 4), 3);
+        this.fwVector = new Float32Array(this.matrix.buffer, (8 * 4), 3);
+        this.sdVector = new Float32Array(this.matrix.buffer, 0, 3);
+
        return (this);
 
 
     }
-
+    proto.setRotation = function (x, y, z) {
+        this.rotation[0] = x;
+        this.rotation[1] = y;
+        this.rotation[2] = z;
+        this.rotationNeedUpdate = true;
+        return this;
+    }
+    proto.setScaling = function (x, y, z) {
+        this.scale[0] = x;
+        this.scale[1] = y;
+        this.scale[2] = z;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
+    proto.setScalingUnit = function (x) {
+        this.scale[0] = x;
+        this.scale[1] = x;
+        this.scale[2] = x;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
+    proto.setPosition = function (x, y, z) {
+        this.position[0] = x;
+        this.position[1] = y;
+        this.position[2] = z;
+        this.matrixNeedUpdate = true;
+        return this;
+    }
     proto.update = function () {
         this.enabling = this.enabled;
         return this.updateMatrix()
@@ -3408,30 +3819,7 @@ tge.transfrom_node = $extend(function (proto,_super) {
     proto.yawPitch = function (dx, dy) {
         this.setRotation(this.rotation[0] + dx, this.rotation[1] + dy, this.rotation[2]);
     }
-    proto.setRotation = function (x, y, z) {
-        this.rotation[0] = x;
-        this.rotation[1] = y;
-        this.rotation[2] = z;
-        this.rotationNeedUpdate = true;
-    }
-    proto.setScaling = function (x, y, z) {
-        this.scale[0] = x;
-        this.scale[1] = y;
-        this.scale[2] = z;
-        this.matrixNeedUpdate = true;
-    }
-    proto.setScalingUnit = function (x) {
-        this.scale[0] = x;
-        this.scale[1] = x;
-        this.scale[2] = x;
-        this.matrixNeedUpdate = true;
-    }
-    proto.setPosition = function (x, y, z) {
-        this.position[0] = x;
-        this.position[1] = y;
-        this.position[2] = z;
-        this.matrixNeedUpdate = true;
-    }
+   
 
     proto.moveFrontBack = function (sp) {
         this.matrix[12] += this.fwVector[0] * sp;
@@ -4007,8 +4395,8 @@ tge.material = $extend(function (proto,_super) {
         engine.updateModelUniforms(mesh.model);
         mesh.drawCount = mesh.geo.numItems;
 
-        if (mesh.geo.indexData !== null) {
-            tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+        tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+        if (mesh.geo.indexData !== null) {            
             if (this.wireframe) {
                 engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_INT, mesh.drawOffset * 2);
             }
@@ -4018,7 +4406,8 @@ tge.material = $extend(function (proto,_super) {
         }
         else {
             if (this.wireframe) {
-                engine.gl.drawArrays(GL_LINE_LOOP, mesh.drawOffset, mesh.drawCount);
+                //engine.gl.drawArrays(GL_LINES, mesh.drawOffset, mesh.drawCount);
+                engine.gl.drawElements(GL_LINES, mesh.geo.wireframe_index_data.length, GL_UNSIGNED_INT, mesh.drawOffset*2);
             }
             else {
                 engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
@@ -4072,6 +4461,7 @@ tge.material = $extend(function (proto,_super) {
         this.drawType = GL_TRIANGLES;
         this.setShinness(options.shinness || 100);
         this.ambient[3] = 0.1;
+        this.wireframe = false;
         this.noDepthTest = false;
         return (this);
 
@@ -4094,7 +4484,7 @@ tge_v_shadow_vertex = tge_u_modelMatrix * vec4(tge_a_position,1.0);
   gl_Position = tge_u_viewProjectionMatrix* tge_v_shadow_vertex;
 tge_v_color= tge_a_color;
 tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
-
+gl_PointSize=10.0;
 }
 
 
@@ -4144,7 +4534,7 @@ gl_FragColor.w*=tge_u_objectMaterial[0].w;
         tge.material.LinesSelected.setAmbient(1, 1, 1);
 
         tge.material.Points = tge.material.LinesSelected.clone();
-        tge.material.Lines.drawType = GL_POINTS;
+        tge.material.Points.drawType = GL_POINTS;
 
         tge.material.LinesRed = tge.material.Lines.clone();
         tge.material.LinesRed.setAmbient(1, 0, 0);
@@ -4186,6 +4576,7 @@ gl_Position = tge_u_modelMatrix * vec4(tge_a_position, 1.0);
 tge_v_normal = normalize(tge_u_modelMatrix * vec4(tge_a_normal,0.0)).xyz;
 tge_v_uv = (tge_u_textureMatrix * vec3(tge_a_uv, 1.0)).xy;
 gl_Position = tge_u_viewProjectionMatrix * tge_v_shadow_vertex;
+gl_PointSize=10.0;
 }
 
 <?=chunk('precision')?>
@@ -4214,6 +4605,8 @@ tge_v_shadow_vertex.xyz, normalize(tge_v_normal), fws_directionToEye,
 tge_u_lightMatrix<?=i?>[3].xyz - tge_v_shadow_vertex.xyz,
 tge_u_lightMatrix<?=i?>[2].xyz);
 <?}?>
+
+
 gl_FragColor = vec4(fws_totalLight, tge_u_objectMaterial[0].w) * texture2D(tge_u_ambientTexture, tge_v_uv);
 gl_FragColor.w*=tge_u_objectMaterial[0].w;
 
@@ -5331,14 +5724,16 @@ tge.terrain_mesh = $extend(function (proto, _super) {
                 var leftZ = this.O.hei(this.offsetX + leftX, this.offsetY + leftY);
                 var rightZ = this.O.hei(this.offsetX + rightX, this.offsetY + rightY);
                 var apexZ = this.O.hei(this.offsetX + apexX, this.offsetY + apexY);
-                // Output the LEFT VERTEX for the triangle
-                this.O.vert(leftX, leftZ, leftY);
-                // Output the RIGHT VERTEX for the triangle
+
+                this.O.vert(leftX, leftZ, leftY);                
                 this.O.vert(rightX, rightZ, rightY);
 
-                // Output the APEX VERTEX for the triangle
+                this.O.vert(rightX, rightZ, rightY);
                 this.O.vert(apexX, apexZ, apexY);
 
+                this.O.vert(apexX, apexZ, apexY);
+                this.O.vert(leftX, leftZ, leftY);
+                
             }
 
         }
@@ -5422,16 +5817,11 @@ tge.terrain_mesh = $extend(function (proto, _super) {
             }
 
         }
-        var vc = this.vertices.length / 3;
-        var indices = [];
-        for (var i = 0; i < vc*3; i+=3) {
-            indices.push(i, i + 1, i + 2);
-        }
+        
         this.geo.attributes.tge_a_position.data = new Float32Array(this.vertices);
         this.geo.attributes.tge_a_position.needsUpdate = true;
-        this.geo.numItems = this.vertices.length / 3;
-        this.geo.setIndices(indices);
-        this.geo.indexNeedsUpdate = true;
+        this.geo.numItems = this.vertices.length ;
+        this.geo.indexData = null;
 
     }
     proto.update_terrain = function (fovX, viewPosition, clipAngle) {
@@ -5538,7 +5928,542 @@ tge.terrain_mesh = $extend(function (proto, _super) {
 }, tge.mesh);
 
 
+
+
+
+tge.terrain_mesh = $extend(function (proto, _super) {
+
+
+    var MAP_SIZE = 256;
+    var NUM_PATCHES_PER_SIDE = 8;
+    var MULT_SCALE = 0.5;
+    var PATCH_SIZE = MAP_SIZE / NUM_PATCHES_PER_SIDE;
+    var VARIANCE_DEPTH = 9;
+    var gFovX = 120.0;
+    var gViewPosition = [21, 4], gFrameVariance = 50, gNumTrisRendered = 11110;
+    var gClipAngle = 0;
+    var vertices = [];
+
+    var SQR = function (v) { return v * v; };
+    var F$ = function (v) {
+        return Math.floor(v);
+    }
+
+    console.log("PATCH_SIZE", PATCH_SIZE);
+
+    function TriTreeNode() {
+        this.LeftChild = undefined;
+        this.RightChild = undefined;
+        this.BaseNeighbor = undefined;
+        this.LeftNeighbor = undefined;
+        this.RightNeighbor = undefined;
+        this.id = $guidi();
+    }
+    var Landscape;
+    var Patch = $extend(function (proto) {
+
+        proto.Reset = function () {
+            // Assume patch is not visible.
+            this.m_isVisible = false;
+
+            // Reset the important relationships
+            this.m_BaseLeft.LeftChild = this.m_BaseLeft.RightChild = this.m_BaseRight.LeftChild = this.m_BaseLeft.LeftChild = undefined;
+
+            // Attach the two m_Base triangles together
+            this.m_BaseLeft.BaseNeighbor = this.m_BaseRight;
+            this.m_BaseRight.BaseNeighbor = this.m_BaseLeft;
+
+            // Clear the other relationships.
+            this.m_BaseLeft.RightNeighbor = this.m_BaseLeft.LeftNeighbor = this.m_BaseRight.RightNeighbor = this.m_BaseRight.LeftNeighbor = undefined;
+        };
+
+        proto.Init = function (heightX, heightY, worldX, worldY) {
+            // Clear all the relationships
+            this.m_BaseLeft.RightNeighbor = this.m_BaseLeft.LeftNeighbor = this.m_BaseRight.RightNeighbor = this.m_BaseRight.LeftNeighbor =
+                this.m_BaseLeft.LeftChild = this.m_BaseLeft.RightChild = this.m_BaseRight.LeftChild = this.m_BaseLeft.LeftChild = undefined;
+
+            // Attach the two m_Base triangles together
+            this.m_BaseLeft.BaseNeighbor = this.m_BaseRight;
+            this.m_BaseRight.BaseNeighbor = this.m_BaseLeft;
+
+            // Store Patch offsets for the world and heightmap.
+            this.m_WorldX = worldX;
+            this.m_WorldY = worldY;
+
+
+            // Initialize flags
+            this.m_VarianceDirty = true;
+            this.m_isVisible = false;
+        }
+
+
+        proto.RecursComputeVariance = function (leftX, leftY, leftZ, rightX, rightY, rightZ, apexX, apexY, apexZ, node) {
+            var centerX = (leftX + rightX) >> 1;		// Compute X coordinate of center of Hypotenuse
+            var centerY = (leftY + rightY) >> 1;		// Compute Y coord...
+            var myVariance = 0;
+
+            // Get the height value at the middle of the Hypotenuse
+            var centerZ = this.L.H((centerY * MAP_SIZE) + centerX);
+            // Variance of this triangle is the actual height at it's hypotenuse midpoint minus the interpolated height.
+            // Use values passed on the stack instead of re-accessing the Height Field.
+
+            myVariance = Math.abs(F$(centerZ) - ((F$(leftZ) + F$(rightZ)) >> 1));
+            // Since we're after speed and not perfect representations,
+            //    only calculate variance down to an 8x8 block
+            if ((Math.abs(leftX - rightX) >= 8) || (Math.abs(leftY - rightY) >= 8)) {
+                // Final Variance for this node is the max of it's own variance and that of it's children.
+                myVariance = Math.max(myVariance, this.RecursComputeVariance(apexX, apexY, apexZ, leftX, leftY, leftZ, centerX, centerY, centerZ, node << 1));
+                myVariance = Math.max(myVariance, this.RecursComputeVariance(rightX, rightY, rightZ, apexX, apexY, apexZ, centerX, centerY, centerZ, 1 + (node << 1)));
+            }
+
+            // Store the final variance for this node.  Note Variance is never zero.
+            if (node < (1 << VARIANCE_DEPTH))
+                this.m_CurrentVariance[node] = 1 + myVariance;
+
+            return myVariance;
+        };
+        proto.ComputeVariance = function () {
+            // Compute variance on each of the base triangles...
+
+            this.m_CurrentVariance = this.m_VarianceLeft;
+            this.RecursComputeVariance(0, PATCH_SIZE,this.L.H(PATCH_SIZE * MAP_SIZE),
+                PATCH_SIZE, 0, this.L.H(PATCH_SIZE),
+                0, 0, this.L.H(0),
+                1);
+
+            this.m_CurrentVariance = this.m_VarianceRight;
+            this.RecursComputeVariance(PATCH_SIZE, 0, this.L.H(PATCH_SIZE),
+                0, PATCH_SIZE, this.L.H(PATCH_SIZE * MAP_SIZE),
+                PATCH_SIZE, PATCH_SIZE, this.L.H((PATCH_SIZE * MAP_SIZE) + PATCH_SIZE),
+                1);
+
+            // Clear the dirty flag for this patch
+            this.m_VarianceDirty = false;
+        };
+
+
+        proto.Split = function (tri) {
+            // We are already split, no need to do it again.
+            if (tri.LeftChild)
+                return;
+
+            // If this triangle is not in a proper diamond, force split our base neighbor
+            if (tri.BaseNeighbor && (tri.BaseNeighbor.BaseNeighbor && tri.BaseNeighbor.BaseNeighbor.id !== tri.id))
+                this.Split(tri.BaseNeighbor);
+
+            // Create children and link into mesh
+            tri.LeftChild = Landscape.AllocateTri();
+            tri.RightChild = Landscape.AllocateTri();
+
+            // If creation failed, just exit.
+            if (!tri.LeftChild)
+                return;
+
+            // Fill in the information we can get from the parent (neighbor pointers)
+            tri.LeftChild.BaseNeighbor  = tri.LeftNeighbor;
+            tri.LeftChild.LeftNeighbor  = tri.RightChild;
+
+            tri.RightChild.BaseNeighbor = tri.RightNeighbor;
+            tri.RightChild.RightNeighbor = tri.LeftChild;
+
+
+            // Link our Left Neighbor to the new children
+            if (tri.LeftNeighbor) {
+                if (tri.LeftNeighbor.BaseNeighbor && tri.LeftNeighbor.BaseNeighbor.id === tri.id)
+                    tri.LeftNeighbor.BaseNeighbor = tri.LeftChild;
+                else if (tri.LeftNeighbor.LeftNeighbor && tri.LeftNeighbor.LeftNeighbor.id === tri.id)
+                    tri.LeftNeighbor.LeftNeighbor = tri.LeftChild;
+                else if (tri.LeftNeighbor.RightNeighbor && tri.LeftNeighbor.RightNeighbor.id === tri.id)
+                    tri.LeftNeighbor.RightNeighbor = tri.LeftChild;
+            }
+            // Link our Right Neighbor to the new children
+            if (tri.RightNeighbor) {
+                if (tri.RightNeighbor.BaseNeighbor && tri.RightNeighbor.BaseNeighbor.id === tri.id)
+                    tri.RightNeighbor.BaseNeighbor = tri.RightChild;
+                else if (tri.RightNeighbor.RightNeighbor && tri.RightNeighbor.RightNeighbor.id === tri.id)
+                    tri.RightNeighbor.RightNeighbor = tri.RightChild;
+                else if (tri.RightNeighbor.LeftNeighbor && tri.RightNeighbor.LeftNeighbor.id === tri.id)
+                    tri.RightNeighbor.LeftNeighbor = tri.RightChild;
+            }
+
+            // Link our Base Neighbor to the new children
+            if (tri.BaseNeighbor) {
+                if (tri.BaseNeighbor.LeftChild) {
+                    tri.BaseNeighbor.LeftChild.RightNeighbor = tri.RightChild;
+                    tri.BaseNeighbor.RightChild.LeftNeighbor = tri.LeftChild;
+                    tri.LeftChild.RightNeighbor = tri.BaseNeighbor.RightChild;
+                    tri.RightChild.LeftNeighbor = tri.BaseNeighbor.LeftChild;
+                }
+                else
+                    this.Split(tri.BaseNeighbor);  // Base Neighbor (in a diamond with us) was not split yet, so do that now.
+            }
+
+            else {
+
+                // An edge triangle, trivial case.
+                tri.LeftChild.RightNeighbor = undefined;
+                tri.RightChild.LeftNeighbor = undefined;
+            }
+
+        };
+
+        proto.RecursTessellate = function (tri, leftX, leftY, rightX, rightY, apexX, apexY, node) {
+            var TriVariance=0;
+            var centerX = (leftX + rightX) >> 1; // Compute X coordinate of center of Hypotenuse
+            var centerY = (leftY + rightY) >> 1; // Compute Y coord...
+
+            if (node < (1 << VARIANCE_DEPTH)) {
+                // Extremely slow distance metric (sqrt is used).
+                // Replace this with a faster one!
+                var distance = 1.0 + Math.sqrt(SQR(centerX - gViewPosition[0]) +
+                    SQR(centerY - gViewPosition[1]));
+
+                // Egads!  A division too?  What's this world coming to!
+                // This should also be replaced with a faster operation.
+                TriVariance = (this.m_CurrentVariance[node] * MAP_SIZE * 2) / distance;	// Take both distance and variance into consideration
+            }
+
+            // OR if we are not below the variance tree, test for variance.
+            if ((node >= (1 << VARIANCE_DEPTH)) || (TriVariance > gFrameVariance))	// IF we do not have variance info for this node, then we must have gotten here by splitting, so continue down to the lowest level.                	
+            {
+                this.Split(tri);														// Split this triangle.
+
+                if (tri.LeftChild &&											// If this triangle was split, try to split it's children as well.
+                    ((Math.abs(leftX - rightX) >= 3) || (Math.abs(leftY - rightY) >= 3)))	// Tessellate all the way down to one vertex per height field entry
+                {
+                    this.RecursTessellate(tri.LeftChild, apexX, apexY, leftX, leftY, centerX, centerY, node << 1);
+                    this.RecursTessellate(tri.RightChild, rightX, rightY, apexX, apexY, centerX, centerY, 1 + (node << 1));
+                }
+            }
+
+
+
+
+        };
+        proto.Tessellate = function () {
+            // Split each of the base triangles
+            this.m_CurrentVariance = this.m_VarianceLeft;
+            this.RecursTessellate(this.m_BaseLeft,
+                this.m_WorldX, this.m_WorldY + PATCH_SIZE,
+                this.m_WorldX + PATCH_SIZE, this.m_WorldY,
+                this.m_WorldX, this.m_WorldY,
+                1);
+
+            this.m_CurrentVariance = this.m_VarianceRight;
+            this.RecursTessellate(this.m_BaseRight,
+                this.m_WorldX + PATCH_SIZE, this.m_WorldY,
+                this.m_WorldX, this.m_WorldY + PATCH_SIZE,
+                this.m_WorldX + PATCH_SIZE, this.m_WorldY + PATCH_SIZE,
+                1);
+        };
+
+
+        proto.RecursRender = function (tri, leftX, leftY, rightX, rightY, apexX, apexY) {
+            if (tri.LeftChild)					// All non-leaf nodes have both children, so just check for one
+            {
+                var centerX = (leftX + rightX) >> 1;	// Compute X coordinate of center of Hypotenuse
+                var centerY = (leftY + rightY) >> 1;	// Compute Y coord...
+
+                this.RecursRender(tri.LeftChild, apexX, apexY, leftX, leftY, centerX, centerY);
+                this.RecursRender(tri.RightChild, rightX, rightY, apexX, apexY, centerX, centerY);
+            }
+            else {
+                // Actual number of rendered triangles...
+                gNumTrisRendered++;
+
+                var leftZ = this.L.H((leftY * MAP_SIZE) + leftX);
+                var rightZ = this.L.H((rightY * MAP_SIZE) + rightX);
+                var apexZ = this.L.H((apexY * MAP_SIZE) + apexX);
+
+                // Output the LEFT VERTEX for the triangle
+             //   glVertex3f(leftX, leftZ, leftY);
+                // Output the RIGHT VERTEX for the triangle
+               // glVertex3f(rightX, rightZ, rightY);
+                // Output the APEX VERTEX for the triangle
+               // glVertex3f(apexX, apexZ, apexY);
+
+                vertices.push(leftX, leftY, -leftZ);
+                vertices.push(rightX, rightY, -rightZ);
+                vertices.push(apexX, apexY, -apexZ);
+
+
+            }
+        };
+
+        proto.Render = function () {
+            this.RecursRender(this.m_BaseLeft,
+                0, PATCH_SIZE,
+                PATCH_SIZE, 0,
+                0, 0);
+
+            this.RecursRender(this.m_BaseRight,
+                PATCH_SIZE, 0,
+                0, PATCH_SIZE,
+                PATCH_SIZE, PATCH_SIZE);
+        };
+
+        proto.SetVisibility = (function () {
+            function orientation( pX, pY,  qX,  qY,  rX,  rY) {
+                var aX, aY, bX, bY;
+                var d;
+
+                aX = qX - pX;
+                aY = qY - pY;
+
+                bX = rX - pX;
+                bY = rY - pY;
+
+                d = aX * bY - aY * bX;
+                return (d < 0) ? (-1) : (d > 0);
+            }
+
+            return function (eyeX, eyeY, leftX, leftY, rightX, rightY) {
+
+                // Get patch's center point
+                var patchCenterX = this.m_WorldX + PATCH_SIZE / 2;
+                var patchCenterY = this.m_WorldY + PATCH_SIZE / 2;
+
+                // Set visibility flag (orientation of both triangles must be counter clockwise)
+                this.m_isVisible = (orientation(eyeX, eyeY, rightX, rightY, patchCenterX, patchCenterY) < 0) &&
+                    (orientation(leftX, leftY, eyeX, eyeY, patchCenterX, patchCenterY) < 0);
+
+               // this.m_isVisible = true;
+            }
+        })();
+
+
+        function Patch() {
+
+            
+            this.m_WorldX = 0;
+            this.m_WorldY=0;
+
+            this.m_VarianceLeft=[];
+            this.m_VarianceRight=[];
+
+            this.m_CurrentVariance=0;
+            this.m_VarianceDirty=true;
+            this.m_isVisible=false;
+
+            this.m_BaseLeft = new TriTreeNode();
+            this.m_BaseRight = new TriTreeNode();
+
+            this.GetBaseLeft = function () { return this.m_BaseLeft; };
+            this.GetBaseRight = function () { return this.m_BaseRight; };
+        }
+
+        
+
+        return Patch;
+    });
+    Landscape = $extend(function (proto) {
+
+        proto.Reset = function () {
+            //
+            // Perform simple visibility culling on entire patches.
+            //   - Define a triangle set back from the camera by one patch size, following
+            //     the angle of the frustum.
+            //   - A patch is visible if it's center point is included in the angle: Left,Eye,Right
+            //   - This visibility test is only accurate if the camera cannot look up or down significantly.
+            //
+            var PI_DIV_180 = 3.14565 / 180.0;
+            var FOV_DIV_2 = gFovX / 2;
+
+            var eyeX = F$(gViewPosition[0] - PATCH_SIZE * Math.sin(gClipAngle * PI_DIV_180));
+            var eyeY = F$(gViewPosition[1] + PATCH_SIZE * Math.cos(gClipAngle * PI_DIV_180));
+
+            var leftX = F$(eyeX + 100.0 * Math.sin((gClipAngle - FOV_DIV_2) * PI_DIV_180));
+            var leftY = F$(eyeY - 100.0 * Math.cos((gClipAngle - FOV_DIV_2) * PI_DIV_180));
+
+            var rightX = F$(eyeX + 100.0 * Math.sin((gClipAngle + FOV_DIV_2) * PI_DIV_180));
+            var rightY = F$(eyeY - 100.0 * Math.cos((gClipAngle + FOV_DIV_2) * PI_DIV_180));
+
+            var X, Y;
+            var patch;
+
+
+
+
+            // Reset rendered triangle count.
+            gNumTrisRendered = 0;
+
+            // Go through the patches performing resets, compute variances, and linking.
+            for (Y = 0; Y < NUM_PATCHES_PER_SIDE; Y++) {
+                for (X = 0; X < NUM_PATCHES_PER_SIDE; X++) {
+                    patch = this.m_Patches[Y][X];
+
+                    // Reset the patch
+                    patch.Reset();
+                    patch.SetVisibility(eyeX, eyeY, leftX, leftY, rightX, rightY);
+
+                    // Check to see if this patch has been deformed since last frame.
+                    // If so, recompute the varience tree for it.
+                    if (patch.m_VarianceDirty)
+                        patch.ComputeVariance();
+
+                    if (patch.m_isVisible) {
+                        // Link all the patches together.
+                        if (X > 0)
+                            patch.GetBaseLeft().LeftNeighbor = this.m_Patches[Y][X - 1].GetBaseRight();
+                        else
+                            patch.GetBaseLeft().LeftNeighbor = undefined;		// Link to bordering Landscape here..
+
+                        if (X < (NUM_PATCHES_PER_SIDE - 1))
+                            patch.GetBaseRight().LeftNeighbor = this.m_Patches[Y][X + 1].GetBaseLeft();
+                        else
+                            patch.GetBaseRight().LeftNeighbor = undefined;		// Link to bordering Landscape here..
+
+                        if (Y > 0)
+                            patch.GetBaseLeft().RightNeighbor = this.m_Patches[Y - 1][X].GetBaseRight();
+                        else
+                            patch.GetBaseLeft().RightNeighbor = undefined;		// Link to bordering Landscape here..
+
+                        if (Y < (NUM_PATCHES_PER_SIDE - 1))
+                            patch.GetBaseRight().RightNeighbor = this.m_Patches[Y + 1][X].GetBaseLeft();
+                        else
+                            patch.GetBaseRight().RightNeighbor = undefined;	// Link to bordering Landscape here..
+                    }
+                }
+            }
+        }
+
+        var patch;
+        proto.Tessellate = function () {
+
+            for (Y = 0; Y < NUM_PATCHES_PER_SIDE; Y++) {
+                for (X = 0; X < NUM_PATCHES_PER_SIDE; X++) {
+                    patch = this.m_Patches[Y][X];
+                    if (patch.m_isVisible) patch.Tessellate();
+                }
+            }
+        };
+
+        proto.Render = function () {
+
+            vertices.length = 0;
+            for (Y = 0; Y < NUM_PATCHES_PER_SIDE; Y++) {
+                for (X = 0; X < NUM_PATCHES_PER_SIDE; X++) {
+                    patch = this.m_Patches[Y][X];
+                    if (patch.m_isVisible) patch.Render();
+                }
+            }
+
+            console.log(vertices);
+
+
+
+    
+        };
+
+
+
+        function Landscape(m_HeightMap) {
+            this.m_HeightMap = m_HeightMap;
+            this.m_Patches = [];
+
+            this.H = function (i) {
+                return this.m_HeightMap[i];
+            }
+            
+            for (var Y = 0; Y < NUM_PATCHES_PER_SIDE; Y++) {
+                this.m_Patches[Y] = this.m_Patches[Y] || [];
+                for (var X = 0; X < NUM_PATCHES_PER_SIDE; X++) {
+                    var patch = new Patch();
+                    this.m_Patches[Y][X] = patch;
+                    patch.L = this;
+                    patch.Init(X * PATCH_SIZE, Y * PATCH_SIZE, X * PATCH_SIZE, Y * PATCH_SIZE);
+                    patch.ComputeVariance();
+                }
+            }
+        }
+        
+	    
+        Landscape.m_TriPool=[];
+        var tri;
+        Landscape.AllocateTri = function () {
+            if (this.m_TriPool.length > 0)
+                tri = this.m_TriPool.pop();
+            else
+               tri = new TriTreeNode();
+            tri.LeftChild = tri.RightChild = null;
+            return tri;
+
+        };
+        
+        return Landscape;
+
+
+    });
+    
+
+
+
+
+
+
+
+
+
+    var geo = tge.geometry.plane({ size: 100, divs: 32 });
+    function terrain_mesh(gridSize, data) {
+        _super.apply(this, [undefined, new tge.material()]);
+        this.terrain = new Float32Array(gridSize * gridSize);
+        this.tileSize = gridSize ;
+        for (let y = 0; y < this.tileSize; y++) {
+            for (let x = 0; x < this.tileSize; x++) {
+                const k = (y * this.tileSize + x) * 4;
+                const r = data[k + 0];
+                const g = data[k + 1];
+                const b = data[k + 2];
+                this.terrain[y * gridSize + x] = r/30;
+               // this.terrain[y * gridSize + x] = (r * 256 * 256 + g * 256.0 + b) / 9988;
+            }
+        }
+
+        this.land = new Landscape(this.terrain);
+        this.geo = geo;
+        this.land.Reset();
+        this.land.Tessellate();
+        this.land.Render();
+
+        
+        
+        /*
+        var g = tge.geometry.plane({ size: 100, divs: 64 });
+        for (let y = 0; y < 64; y++) {
+            for (let x = 0; x < 64; x++) {
+                var k = (((y * 4) * gridSize) + (x * 4))*4;
+                g.attributes.tge_a_position.data[((y * 64 + x) * 3) + 2] = data[k + 0] / 30; //this.terrain[(y * 2) * gridSize + (x * 2)];
+                //vertices.push(x, this.terrain[y * gridSize + x], y);
+            }
+        }
+        */
+        
+        var g = new tge.geometry();
+        g.addAttribute("tge_a_position", {
+            data: new Float32Array(vertices),
+            itemSize: 3, offset: 0
+        });
+        g.numItems = vertices.length / 3;        
+        
+        this.geo = g;
+        return this;
+    }
+
+
+
+
+
+
+
+
+    return terrain_mesh;
+
+}, tge.mesh);
+
+
 /*./model.js*/
+
 
 
 
@@ -5631,6 +6556,1668 @@ tge.model = $extend(function (proto,_super) {
 }, tge.transfrom_node);
 
 
+tge.planet = $extend(function (proto, _super) {
+
+    var theta = Math.PI / 2;
+    var phi = Math.PI / 2;
+    var vec2 = tge.vec2;
+    var vec3 = tge.vec3;
+
+    var toPoint = function (o, r, lat, lon) {
+        o[0] = r * Math.cos(lat) * Math.sin(lon);
+        o[1] = r * Math.sin(lat);
+        o[2] = r * Math.cos(lat) * Math.cos(lon);
+        return o;
+
+        o[0] = r * Math.cos(lon) * Math.sin(lat)
+        o[2] = r * Math.sin(lon) * Math.sin(lat)
+        o[1] = r * Math.cos(lat);
+        return o;
+        
+    };
+
+
+    var toLatLon = (function () {
+        var r;
+        return function (o, x, y, z) {
+            r = Math.sqrt(x * x + y * y + z * z);
+            o[0] = Math.asin(y / r);
+            o[1] = Math.asin(x / r / Math.cos(o[0]));
+            return o;
+        }
+    })();
+
+
+
+    var OctaTerrain = tge.planet = $extend(function (proto) {
+
+
+
+
+        proto.getChunkCenter = function (o, p1, p2, p3) {
+            o[0] = (p1[0] + p2[0] + p3[0]) / 3;
+            o[1] = (p1[1] + p2[1] + p3[1]) / 3;
+            o[2] = (p1[2] + p2[2] + p3[2]) / 3;
+            return o;
+        };
+
+        proto.boundingRadius = function (c, p1, p2, p3) {
+            return Math.max(vec3.distance(c, p1), Math.max(vec3.distance(c, p2), vec3.distance(c, p3)));
+        };
+
+        proto.needDivide = (function () {
+            var center = vec3(), boundRadius;
+            return function (cameraPos, p1, p2, p3, z) {
+                this.getChunkCenter(center, p1, p2, p3);
+                boundRadius = this.boundingRadius(center, p1, p2, p3);
+
+                return vec3.distance(cameraPos, center) < boundRadius * this.detail;
+            }
+        })();
+
+        proto.existChunk = function (id) {
+            return this.chunks[id] !== undefined;
+
+        };
+        proto.addChunk = (function () {
+            var p1 = vec3(), p2 = vec3(), p3 = vec3();
+            var p12 = vec3(), p23 = vec3(), p31 = vec3();
+            var temp = vec3();
+            return function (v1, v2, v3, id, divide, positiveOriented) {
+
+                vec3.scale(p1, v1, 1 / vec3.getLength(v1) * this.radius);
+                vec3.scale(p2, v2, 1 / vec3.getLength(v2) * this.radius);
+                vec3.scale(p3, v3, 1 / vec3.getLength(v3) * this.radius);
+
+                if (divide) {
+                    var z = this.getIdLevel(id);
+                    if (z < this.maxZ && this.needDivide(this.cameraPos, p1, p2, p3, z)) {
+                        var continueDivide = !(this.progressive && this.existChunk(id));
+                        // Align the longitude of the right side along the edge for the upper
+                        // triangles
+
+                        vec3.scale(p12, vec3.add(temp, p1, p2), 0.5);
+                        vec3.scale(p23, vec3.add(temp, p2, p3), 0.5);
+                        vec3.scale(p31, vec3.add(temp, p3, p1), 0.5);
+                        id = this.increaseIdLevel(id);
+                        console.log(id);
+                        if (positiveOriented) {
+                            this.addChunk(p1, p12, p31, this.setIdIndex(id, 0), continueDivide, true);
+                            this.addChunk(p12, p23, p31, this.setIdIndex(id, 1), continueDivide, false);
+                            this.addChunk(p12, p2, p23, this.setIdIndex(id, 2), continueDivide, true);
+                            this.addChunk(p31, p23, p3, this.setIdIndex(id, 3), continueDivide, true);
+                        } else {
+                            this.addChunk(p1, p12, p31, this.setIdIndex(id, 0), continueDivide, false);
+                            this.addChunk(p31, p23, p3, this.setIdIndex(id, 2), continueDivide, false);
+                            this.addChunk(p31, p12, p23, this.setIdIndex(id, 1), continueDivide, true);
+                            this.addChunk(p12, p2, p23, this.setIdIndex(id, 3), continueDivide, false);
+                        }
+
+                    }
+                }
+                else {
+                    if (!this.existChunk(id)) {
+                        this.chunks[id] = true;
+                        if (this.getIdSide(id) >= 4) {
+                            //    std:: swap(b, c);
+                            this.vertices.push(p1[0], p1[1], p1[2]);
+                            this.vertices.push(p3[0], p3[1], p3[2]);
+                            this.vertices.push(p2[0], p2[1], p2[2]);
+                        }
+                        else {
+                            this.vertices.push(p1[0], p1[1], p1[2]);
+                            this.vertices.push(p2[0], p2[1], p2[2]);
+                            this.vertices.push(p3[0], p3[1], p3[2]);
+                        }
+
+                    }
+                }
+            }
+        })();
+
+
+        proto.setIdSide = function (side) {
+            return side << (6 * 8);
+        };
+
+        proto.getIdSide = function (id) {
+            return (id >> 6 * 8) & 0xff;
+        };
+
+        proto.decreaseIdLevel = function (id) {
+            return id - (0x1 << 7 * 8);
+        };
+
+        proto.increaseIdLevel = function (id) {
+            return id + (0x1 << 7 * 8);
+        };
+
+        proto.getIdLevel = function (id) {
+            return id >> 7 * 8;
+        };
+
+
+        proto.setIdIndex = function (id, index) {
+
+            return id | (index << this.getIdLevel(id) * 2);
+        };
+
+        proto.addSide = (function () {
+            var v1 = vec3(), v2 = vec3(), v3 = vec3();
+            var latScalar, lonScalar;
+
+            return function (id) {
+                latScalar = (id > 3 ? -1 : 1);
+                lonScalar = id % 4;
+
+
+                toPoint(v1, this.radius, latScalar * theta, lonScalar * phi);
+                toPoint(v2, this.radius, 0.0, lonScalar * phi);
+                toPoint(v3, this.radius, 0.0, (lonScalar + 1) * phi);
+
+                this.addChunk(v1, v2, v3, this.setIdSide(id), true, true);
+
+            }
+        })();
+
+
+
+
+
+        proto.generate = function (cameraPos, cameraView) {
+            this.vertices.length = 0;
+            this.cameraPos = cameraPos;
+            this.cameraView = cameraView;
+
+            for (var i = 0; i < 8; i++)
+                this.addSide(i);
+
+        };
+
+
+
+        function OctaTerrain(radius, maxZ, detail) {
+            if (maxZ <= 0 || maxZ > 24)
+                maxZ = maxZ <= 0 ? 0 : 24;
+
+            this.radius = radius;
+            this.maxZ = maxZ;
+            this.detail = detail;
+            this.chunks = {};
+            this.vertices = [];
+            this.progressive = false;
+
+        }
+
+        return OctaTerrain;
+    });
+    var Delatin = (function () {
+        function orient(ax, ay, bx, by, cx, cy) {
+            return (bx - cx) * (ay - cy) - (by - cy) * (ax - cx);
+        }
+
+        function inCircle(ax, ay, bx, by, cx, cy, px, py) {
+            var dx = ax - px;
+            var dy = ay - py;
+            var ex = bx - px;
+            var ey = by - py;
+            var fx = cx - px;
+            var fy = cy - py;
+            var ap = dx * dx + dy * dy;
+            var bp = ex * ex + ey * ey;
+            var cp = fx * fx + fy * fy;
+            return dx * (ey * cp - bp * fy) - dy * (ex * cp - bp * fx) + ap * (ex * fy - ey * fx) < 0;
+        }
+        function Delatin(data, width, height) {
+            if (height === void 0) {
+                height = width;
+            }
+
+            this.data = data; // height data
+
+            this.width = width;
+            this.height = height;
+            this.coords = []; // vertex coordinates (x, y)
+
+            this.triangles = []; // mesh triangle indices
+            // additional triangle data
+
+            this._halfedges = [];
+            this._candidates = [];
+            this._queueIndices = [];
+            this._queue = []; // queue of added triangles
+
+            this._errors = [];
+            this._rms = [];
+            this._pending = []; // triangles pending addition to queue
+
+            this._pendingLen = 0;
+            this._rmsSum = 0;
+            var x1 = width - 1;
+            var y1 = height - 1;
+
+            var p0 = this._addPoint(0, 0);
+
+            var p1 = this._addPoint(x1, 0);
+
+            var p2 = this._addPoint(0, y1);
+
+            var p3 = this._addPoint(x1, y1); // add initial two triangles
+
+
+            var t0 = this._addTriangle(p3, p0, p2, -1, -1, -1);
+
+            this._addTriangle(p0, p3, p1, t0, -1, -1);
+
+            this._flush();
+        }
+
+        // refine the mesh until its maximum error gets below the given one
+
+
+        var _proto = Delatin.prototype;
+
+        _proto.run = function run(maxError) {
+            if (maxError === void 0) {
+                maxError = 1;
+            }
+
+            while (this.getMaxError() > maxError) {
+                this.refine();
+            }
+        } // refine the mesh with a single point
+
+
+        _proto.refine = function refine() {
+            this._step();
+
+            this._flush();
+        } // max error of the current mesh
+
+        _proto.getMaxError = function getMaxError() {
+            return this._errors[0];
+        } // root-mean-square deviation of the current mesh
+
+        _proto.getRMSD = function getRMSD() {
+            return this._rmsSum > 0 ? Math.sqrt(this._rmsSum / (this.width * this.height)) : 0;
+        } // height value at a given position
+
+        _proto.heightAt = function heightAt(x, y) {
+            return this.data[this.width * y + x];
+        } // rasterize and queue all triangles that got added or updated in _step
+
+        _proto._flush = function _flush() {
+            var coords = this.coords;
+
+            for (var i = 0; i < this._pendingLen; i++) {
+                var t = this._pending[i]; // rasterize triangle to find maximum pixel error
+
+                var a = 2 * this.triangles[t * 3 + 0];
+                var b = 2 * this.triangles[t * 3 + 1];
+                var c = 2 * this.triangles[t * 3 + 2];
+
+                this._findCandidate(coords[a], coords[a + 1], coords[b], coords[b + 1], coords[c], coords[c + 1], t);
+            }
+
+            this._pendingLen = 0;
+        } // rasterize a triangle, find its max error, and queue it for processing
+
+        _proto._findCandidate = function _findCandidate(p0x, p0y, p1x, p1y, p2x, p2y, t) {
+            // triangle bounding box
+            var minX = Math.min(p0x, p1x, p2x);
+            var minY = Math.min(p0y, p1y, p2y);
+            var maxX = Math.max(p0x, p1x, p2x);
+            var maxY = Math.max(p0y, p1y, p2y); // forward differencing variables
+
+            var w00 = orient(p1x, p1y, p2x, p2y, minX, minY);
+            var w01 = orient(p2x, p2y, p0x, p0y, minX, minY);
+            var w02 = orient(p0x, p0y, p1x, p1y, minX, minY);
+            var a01 = p1y - p0y;
+            var b01 = p0x - p1x;
+            var a12 = p2y - p1y;
+            var b12 = p1x - p2x;
+            var a20 = p0y - p2y;
+            var b20 = p2x - p0x; // pre-multiplied z values at vertices
+
+            var a = orient(p0x, p0y, p1x, p1y, p2x, p2y);
+            var z0 = this.heightAt(p0x, p0y) / a;
+            var z1 = this.heightAt(p1x, p1y) / a;
+            var z2 = this.heightAt(p2x, p2y) / a; // iterate over pixels in bounding box
+
+            var maxError = 0;
+            var mx = 0;
+            var my = 0;
+            var rms = 0;
+
+            for (var y = minY; y <= maxY; y++) {
+                // compute starting offset
+                var dx = 0;
+
+                if (w00 < 0 && a12 !== 0) {
+                    dx = Math.max(dx, Math.floor(-w00 / a12));
+                }
+
+                if (w01 < 0 && a20 !== 0) {
+                    dx = Math.max(dx, Math.floor(-w01 / a20));
+                }
+
+                if (w02 < 0 && a01 !== 0) {
+                    dx = Math.max(dx, Math.floor(-w02 / a01));
+                }
+
+                var w0 = w00 + a12 * dx;
+                var w1 = w01 + a20 * dx;
+                var w2 = w02 + a01 * dx;
+                var wasInside = false;
+
+                for (var x = minX + dx; x <= maxX; x++) {
+                    // check if inside triangle
+                    if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
+                        wasInside = true; // compute z using barycentric coordinates
+
+                        var z = z0 * w0 + z1 * w1 + z2 * w2;
+                        var dz = Math.abs(z - this.heightAt(x, y));
+                        rms += dz * dz;
+
+                        if (dz > maxError) {
+                            maxError = dz;
+                            mx = x;
+                            my = y;
+                        }
+                    } else if (wasInside) {
+                        break;
+                    }
+
+                    w0 += a12;
+                    w1 += a20;
+                    w2 += a01;
+                }
+
+                w00 += b12;
+                w01 += b20;
+                w02 += b01;
+            }
+
+            if (mx === p0x && my === p0y || mx === p1x && my === p1y || mx === p2x && my === p2y) {
+                maxError = 0;
+            } // update triangle metadata
+
+
+            this._candidates[2 * t] = mx;
+            this._candidates[2 * t + 1] = my;
+            this._rms[t] = rms; // add triangle to priority queue
+
+            this._queuePush(t, maxError, rms);
+        } // process the next triangle in the queue, splitting it with a new point
+
+        _proto._step = function _step() {
+            // pop triangle with highest error from priority queue
+            var t = this._queuePop();
+
+            var e0 = t * 3 + 0;
+            var e1 = t * 3 + 1;
+            var e2 = t * 3 + 2;
+            var p0 = this.triangles[e0];
+            var p1 = this.triangles[e1];
+            var p2 = this.triangles[e2];
+            var ax = this.coords[2 * p0];
+            var ay = this.coords[2 * p0 + 1];
+            var bx = this.coords[2 * p1];
+            var by = this.coords[2 * p1 + 1];
+            var cx = this.coords[2 * p2];
+            var cy = this.coords[2 * p2 + 1];
+            var px = this._candidates[2 * t];
+            var py = this._candidates[2 * t + 1];
+
+            var pn = this._addPoint(px, py);
+
+            if (orient(ax, ay, bx, by, px, py) === 0) {
+                this._handleCollinear(pn, e0);
+            } else if (orient(bx, by, cx, cy, px, py) === 0) {
+                this._handleCollinear(pn, e1);
+            } else if (orient(cx, cy, ax, ay, px, py) === 0) {
+                this._handleCollinear(pn, e2);
+            } else {
+                var h0 = this._halfedges[e0];
+                var h1 = this._halfedges[e1];
+                var h2 = this._halfedges[e2];
+
+                var t0 = this._addTriangle(p0, p1, pn, h0, -1, -1, e0);
+
+                var t1 = this._addTriangle(p1, p2, pn, h1, -1, t0 + 1);
+
+                var t2 = this._addTriangle(p2, p0, pn, h2, t0 + 2, t1 + 1);
+
+                this._legalize(t0);
+
+                this._legalize(t1);
+
+                this._legalize(t2);
+            }
+        } // add coordinates for a new vertex
+
+        _proto._addPoint = function _addPoint(x, y) {
+            var i = this.coords.length >> 1;
+            this.coords.push(x, y);
+            return i;
+        } // add or update a triangle in the mesh
+
+        _proto._addTriangle = function _addTriangle(a, b, c, ab, bc, ca, e) {
+            if (e === void 0) {
+                e = this.triangles.length;
+            }
+
+            var t = e / 3; // new triangle index
+            // add triangle vertices
+
+            this.triangles[e + 0] = a;
+            this.triangles[e + 1] = b;
+            this.triangles[e + 2] = c; // add triangle halfedges
+
+            this._halfedges[e + 0] = ab;
+            this._halfedges[e + 1] = bc;
+            this._halfedges[e + 2] = ca; // link neighboring halfedges
+
+            if (ab >= 0) {
+                this._halfedges[ab] = e + 0;
+            }
+
+            if (bc >= 0) {
+                this._halfedges[bc] = e + 1;
+            }
+
+            if (ca >= 0) {
+                this._halfedges[ca] = e + 2;
+            } // init triangle metadata
+
+
+            this._candidates[2 * t + 0] = 0;
+            this._candidates[2 * t + 1] = 0;
+            this._queueIndices[t] = -1;
+            this._rms[t] = 0; // add triangle to pending queue for later rasterization
+
+            this._pending[this._pendingLen++] = t; // return first halfedge index
+
+            return e;
+        };
+
+        _proto._legalize = function _legalize(a) {
+            // if the pair of triangles doesn't satisfy the Delaunay condition
+            // (p1 is inside the circumcircle of [p0, pl, pr]), flip them,
+            // then do the same check/flip recursively for the new pair of triangles
+            //
+            //           pl                    pl
+            //          /||\                  /  \
+            //       al/ || \bl            al/    \a
+            //        /  ||  \              /      \
+            //       /  a||b  \    flip    /___ar___\
+            //     p0\   ||   /p1   =>   p0\---bl---/p1
+            //        \  ||  /              \      /
+            //       ar\ || /br             b\    /br
+            //          \||/                  \  /
+            //           pr                    pr
+            var b = this._halfedges[a];
+
+            if (b < 0) {
+                return;
+            }
+
+            var a0 = a - a % 3;
+            var b0 = b - b % 3;
+            var al = a0 + (a + 1) % 3;
+            var ar = a0 + (a + 2) % 3;
+            var bl = b0 + (b + 2) % 3;
+            var br = b0 + (b + 1) % 3;
+            var p0 = this.triangles[ar];
+            var pr = this.triangles[a];
+            var pl = this.triangles[al];
+            var p1 = this.triangles[bl];
+            var coords = this.coords;
+
+            if (!inCircle(coords[2 * p0], coords[2 * p0 + 1], coords[2 * pr], coords[2 * pr + 1], coords[2 * pl], coords[2 * pl + 1], coords[2 * p1], coords[2 * p1 + 1])) {
+                return;
+            }
+
+            var hal = this._halfedges[al];
+            var har = this._halfedges[ar];
+            var hbl = this._halfedges[bl];
+            var hbr = this._halfedges[br];
+
+            this._queueRemove(a0 / 3);
+
+            this._queueRemove(b0 / 3);
+
+            var t0 = this._addTriangle(p0, p1, pl, -1, hbl, hal, a0);
+
+            var t1 = this._addTriangle(p1, p0, pr, t0, har, hbr, b0);
+
+            this._legalize(t0 + 1);
+
+            this._legalize(t1 + 2);
+        } // handle a case where new vertex is on the edge of a triangle
+
+        _proto._handleCollinear = function _handleCollinear(pn, a) {
+            var a0 = a - a % 3;
+            var al = a0 + (a + 1) % 3;
+            var ar = a0 + (a + 2) % 3;
+            var p0 = this.triangles[ar];
+            var pr = this.triangles[a];
+            var pl = this.triangles[al];
+            var hal = this._halfedges[al];
+            var har = this._halfedges[ar];
+            var b = this._halfedges[a];
+
+            if (b < 0) {
+                var _t = this._addTriangle(pn, p0, pr, -1, har, -1, a0);
+
+                var _t2 = this._addTriangle(p0, pn, pl, _t, -1, hal);
+
+                this._legalize(_t + 1);
+
+                this._legalize(_t2 + 2);
+
+                return;
+            }
+
+            var b0 = b - b % 3;
+            var bl = b0 + (b + 2) % 3;
+            var br = b0 + (b + 1) % 3;
+            var p1 = this.triangles[bl];
+            var hbl = this._halfedges[bl];
+            var hbr = this._halfedges[br];
+
+            this._queueRemove(b0 / 3);
+
+            var t0 = this._addTriangle(p0, pr, pn, har, -1, -1, a0);
+
+            var t1 = this._addTriangle(pr, p1, pn, hbr, -1, t0 + 1, b0);
+
+            var t2 = this._addTriangle(p1, pl, pn, hbl, -1, t1 + 1);
+
+            var t3 = this._addTriangle(pl, p0, pn, hal, t0 + 2, t2 + 1);
+
+            this._legalize(t0);
+
+            this._legalize(t1);
+
+            this._legalize(t2);
+
+            this._legalize(t3);
+        } // priority queue methods
+
+        _proto._queuePush = function _queuePush(t, error, rms) {
+            var i = this._queue.length;
+            this._queueIndices[t] = i;
+
+            this._queue.push(t);
+
+            this._errors.push(error);
+
+            this._rmsSum += rms;
+
+            this._queueUp(i);
+        };
+
+        _proto._queuePop = function _queuePop() {
+            var n = this._queue.length - 1;
+
+            this._queueSwap(0, n);
+
+            this._queueDown(0, n);
+
+            return this._queuePopBack();
+        };
+
+        _proto._queuePopBack = function _queuePopBack() {
+            var t = this._queue.pop();
+
+            this._errors.pop();
+
+            this._rmsSum -= this._rms[t];
+            this._queueIndices[t] = -1;
+            return t;
+        };
+
+        _proto._queueRemove = function _queueRemove(t) {
+            var i = this._queueIndices[t];
+
+            if (i < 0) {
+                var it = this._pending.indexOf(t);
+
+                if (it !== -1) {
+                    this._pending[it] = this._pending[--this._pendingLen];
+                } else {
+                    throw new Error('Broken triangulation (something went wrong).');
+                }
+
+                return;
+            }
+
+            var n = this._queue.length - 1;
+
+            if (n !== i) {
+                this._queueSwap(i, n);
+
+                if (!this._queueDown(i, n)) {
+                    this._queueUp(i);
+                }
+            }
+
+            this._queuePopBack();
+        };
+
+        _proto._queueLess = function _queueLess(i, j) {
+            return this._errors[i] > this._errors[j];
+        };
+
+        _proto._queueSwap = function _queueSwap(i, j) {
+            var pi = this._queue[i];
+            var pj = this._queue[j];
+            this._queue[i] = pj;
+            this._queue[j] = pi;
+            this._queueIndices[pi] = j;
+            this._queueIndices[pj] = i;
+            var e = this._errors[i];
+            this._errors[i] = this._errors[j];
+            this._errors[j] = e;
+        };
+
+        _proto._queueUp = function _queueUp(j0) {
+            var j = j0;
+
+            while (true) {
+                var i = j - 1 >> 1;
+
+                if (i === j || !this._queueLess(j, i)) {
+                    break;
+                }
+
+                this._queueSwap(i, j);
+
+                j = i;
+            }
+        };
+
+        _proto._queueDown = function _queueDown(i0, n) {
+            var i = i0;
+
+            while (true) {
+                var j1 = 2 * i + 1;
+
+                if (j1 >= n || j1 < 0) {
+                    break;
+                }
+
+                var j2 = j1 + 1;
+                var j = j1;
+
+                if (j2 < n && this._queueLess(j2, j1)) {
+                    j = j2;
+                }
+
+                if (!this._queueLess(j, i)) {
+                    break;
+                }
+
+                this._queueSwap(i, j);
+
+                i = j;
+            }
+
+            return i > i0;
+        };
+
+        return Delatin;
+
+
+
+    })();
+
+
+
+    proto.update = (function (super_update) {
+        return (function () {
+            if (super_update.apply(this)) {
+
+                return (true);
+            }
+            return (false);
+        });
+    })(proto.update);
+
+    var Planet = $extend(function (proto) {
+
+
+
+
+        proto.generate = function () {
+            widthSegments = 360 / 30;
+            heightSegments = 360 / 30;
+            var vCount = (widthSegments + 1) * (heightSegments + 1);
+            var gridX = Math.floor(widthSegments);
+            var gridY = Math.floor(heightSegments);
+
+            var width = this.rad * 1;
+            var height = this.rad * 1;
+            var segment_width = width / gridX;
+            var segment_height = height / gridY;
+            var width_half = width / 2;
+            var height_half = height / 2;
+
+            var gridX1 = gridX + 1;
+            var gridY1 = gridY + 1;
+            var ix, iy;
+
+            this.indices.length = 0;
+            this.vertices.length = 0;
+            var ii = 0, vi = 0;
+            var v = tge.vec3();
+            for (iy = 0; iy < gridY1; iy++) {
+                var y = iy * segment_height //- height_half;
+                for (ix = 0; ix < gridX1; ix++) {
+                    var x = ix * segment_width //- width_half;
+                    //this.vertices.push(x, -y, 0);
+                    //console.log((x / width)*360, (y / height)*360);
+                    toPoint(v, this.rad, (x / width) * 360, (y / height) * 180);
+                    this.vertices.push(v[0], v[1], v[2]);
+
+
+
+                }
+
+            }
+
+            ii = 0;
+            for (iy = 0; iy < gridY; iy++) {
+                for (ix = 0; ix < gridX; ix++) {
+                    var a = ix + gridX1 * iy;
+                    var b = ix + gridX1 * (iy + 1);
+                    var c = (ix + 1) + gridX1 * (iy + 1);
+                    var d = (ix + 1) + gridX1 * iy;
+                    // faces
+                    this.indices[ii++] = a;
+                    this.indices[ii++] = b;
+                    this.indices[ii++] = d;
+                    this.indices[ii++] = b;
+                    this.indices[ii++] = c;
+                    this.indices[ii++] = d;
+                }
+
+            }
+
+
+        }
+
+        proto.generate = function () {
+
+            this.vertices.length = 0;
+            var v = tge.vec3(0, 0, 0);
+            for (var lat = -90; lat < 90; lat += 15) {
+                for (var lon = -180; lon < 180; lon += 30) {
+                    this.vertices.push(v[0], v[1], v[2]);
+                    toPoint(v, this.rad, lat, lon);
+                    this.vertices.push(v[0], v[1], v[2]);
+
+                }
+            }
+
+        };
+
+        proto.generate = (function () {
+
+            var tris = [];
+            function findArea(a, b, c) {
+                var s = (a + b + c) / 2;
+                return Math.sqrt(s * (s - a) *
+                    (s - b) * (s - c));
+            }
+
+            function addTri(px1, py1, px2, py2, px3, py3) {
+                var a = findArea(
+                    Math.hypot(px2 - px1, py2 - py1),
+                    Math.hypot(px3 - px2, py3 - py2),
+                    Math.hypot(px3 - px1, py3 - py1));
+                console.log("a", a);
+                if (a > 15) {
+
+                    var cx = px2 + (px3 - px2) * 0.5;
+                    var cy = py2 + (py3 - py2) * 0.5;
+
+                    addTri(px1, py1, cx, cy, px3, py3);
+                    addTri(px2, py2, cx, cy, px1, py1);
+
+                }
+                else {
+
+                    tris.push([[px1, py1], [px2, py2], [px3, py3]]);
+                }
+
+
+            }
+
+            return function (lat1, lon1, lat2, lon2) {
+
+                tris.length = 0;
+                this.vertices.length = 0;
+                var r = this.rad;
+                var ver = this.vertices;
+                var v = tge.vec3(0, 0, 0);
+
+                addTri(lat1, lon1, lat1, lon2, lat2, lon2);
+
+                addTri(lat2, lon2, lat2, lon1, lat1, lon1);
+
+                tris.forEach(function (t) {
+
+                    toPoint(v, r, t[0][0], t[0][1]);
+                    ver.push(v[0], v[1], v[2]);
+
+                    toPoint(v, r, t[1][0], t[1][1]);
+                    ver.push(v[0], v[1], v[2]);
+
+                    toPoint(v, r, t[2][0], t[2][1]);
+                    ver.push(v[0], v[1], v[2]);
+
+
+                });
+
+
+
+
+
+
+            }
+        })();
+
+        proto.generate = (function () {
+
+            var tris = [];
+            function findArea(a, b, c) {
+                var s = (a + b + c) / 2;
+                return Math.sqrt(s * (s - a) *
+                    (s - b) * (s - c));
+            }
+
+            var verts;
+
+            function draw_recursive(p1, p2, p3, center, size) {
+                var ratio_size = size * 1;
+                var minsize = 0.03;
+
+                var edge_center = [vec3(), vec3(), vec3()];
+                var temp = vec3();
+                vec3.scale(edge_center[0], vec3.add(temp, p1, p2), 0.5);
+                vec3.scale(edge_center[1], vec3.add(temp, p2, p3), 0.5);
+                vec3.scale(edge_center[2], vec3.add(temp, p3, p1), 0.5);
+
+                var edge_test = [false, false, false];
+                var angle = [0, 0, 0];
+
+                for (var i = 0; i < 3; i++) {
+
+                    vec3.add(temp, center, edge_center[i]);
+                    edge_test[i] = vec3.getLength(temp) > ratio_size;
+                    var dot = vec3.dot(edge_center[i], vec3.normalize(temp, temp));
+                    angle[i] = Math.acos(Math.clamp(dot, -1, 1));
+                }
+
+
+                // culling
+                // if (Math.max(angle[0], Math.max(angle[1], angle[2])) < Math.PI / 2 - 0.2) return;
+
+                // draw
+                if ((edge_test[0] && edge_test[1] && edge_test[2]) || size < minsize) {
+                    verts.push(p1[0], p1[1], p1[2]);
+                    verts.push(p2[0], p2[1], p2[2]);
+                    verts.push(p3[0], p3[1], p3[2]);
+
+
+                    return;
+                }
+
+
+
+                // Recurse
+                var p = [p1, p2, p3, edge_center[0], edge_center[1], edge_center[2]];
+
+                var idx = [0, 3, 5, 5, 3, 4, 3, 1, 4, 5, 4, 2];
+                var valid = [true, true, true, true];
+
+                if (edge_test[0]) { p[3] = p1; valid[0] = false; } // skip triangle 0 ?
+                if (edge_test[1]) { p[4] = p2; valid[2] = false; } // skip triangle 2 ?
+                if (edge_test[2]) { p[5] = p3; valid[3] = false; } // skip triangle 3 ?
+
+
+                for (var i = 0; i < 3; i++) {
+
+                    var i1 = idx[3 * i + 0],
+                        i2 = idx[3 * i + 1],
+                        i3 = idx[3 * i + 2];
+                    draw_recursive(
+                        vec3.normalize(p[i1], p[i1]),
+                        vec3.normalize(p[i2], p[i2]),
+                        vec3.normalize(p[i3], p[i3]),
+                        center, size / 2);
+                }
+
+            };
+
+            return function () {
+
+
+                this.vertices.length = 0;
+                verts = this.vertices;
+                // create icosahedron
+                var t = (1.0 + Math.sqrt(5.0)) / 2.0;
+
+
+                var p = [
+                    [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+                    [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+                    [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
+
+                var idx = [0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
+                    1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 10, 7, 6, 7, 1, 8,
+                    3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
+                    4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1];
+
+
+                var center = vec3();
+                for (var i = 0; i < idx.length / 3; i++) {
+
+
+
+                    draw_recursive(
+
+                        vec3.normalize(p[idx[i * 3 + 0]], p[idx[i * 3 + 0]]),
+                        vec3.normalize(p[idx[i * 3 + 1]], p[idx[i * 3 + 1]]),
+                        vec3.normalize(p[idx[i * 3 + 2]], p[idx[i * 3 + 2]])
+                        , center, 12
+                    );
+
+                }
+
+
+
+
+
+
+
+
+
+
+            }
+        })();
+
+
+        function Planet(rad) {
+            this.rad = rad;
+            this.vertices = [];
+            this.indices = [];
+        }
+
+
+        return Planet;
+
+    });
+
+    function planet2(data) {
+        _super.apply(this);
+
+        //this.ot = new Planet(30,30,2);
+
+        //this.ot.generate(70,70,90,80);
+
+        var tileSize = 256;
+
+        var terrain = new Float32Array(tileSize * tileSize);
+        for (let y = 0; y < tileSize; y++) {
+            for (let x = 0; x < tileSize; x++) {
+                const k = (y * tileSize + x) * 4;
+                const r = data[k + 0];
+                const g = data[k + 1];
+                const b = data[k + 2];
+                terrain[y * tileSize + x] = r / 3;
+
+            }
+        }
+
+
+
+        this.del = new Delatin(terrain, 256, 256);
+
+        this.del.run(0.1);
+
+
+
+        //var m = this.addMesh(new tge.mesh(tge.geometry.sphere({}), new tge.material()));
+
+        var verts = new Float32Array((this.del.coords.length / 2) * 3);
+        var x, z;
+        for (var i = 0; i < verts.length / 3; i++) {
+            x = this.del.coords[i * 2];
+            z = this.del.coords[i * 2 + 1];
+            verts[i * 3] = ((x) - 128) * 4;
+            verts[i * 3 + 2] = ((z) - 128) * 4;
+            verts[i * 3 + 1] = terrain[z * 256 + x];
+
+        }
+
+        var g = new tge.geometry();
+        g.addAttribute("tge_a_position", {
+            data: verts, // new Float32Array(this.del.coords),
+            itemSize: 3, offset: 0
+        });
+
+        g.addAttribute("tge_a_normal", {
+            data: new Float32Array(verts.length),
+            itemSize: 3, offset: 0
+        });
+        //g.numItems = this.ot.vertices.length / 3;
+        g.setIndices(this.del.triangles);
+
+        var m;
+        tge.geometry.calculate_normals(g);
+
+
+
+        m = this.addMesh(new tge.mesh(g, new tge.phong_material()));
+        m.material.setAmbient(0, 0, 0);
+        m.material.wireframe = true;
+
+        m = this.addMesh(new tge.mesh(g, new tge.phong_material()));
+        //m.material.setFlag(tge.SHADING.DOUBLE_SIDES);
+        m.material.setFlag(tge.SHADING.RECEIVE_SHADOW);
+        // m.material.wireframe = true; // 
+        // m.material.setTansparency(0.99);
+        // m.material.drawType = GL_LINES;
+
+
+
+        return (this);
+
+    }
+
+
+    function planet3(data) {
+        _super.apply(this);
+
+
+        var g = tge.geometry.cube({ size: 50, divs: 4 });
+
+        m = this.addMesh(new tge.mesh(g, new tge.phong_material()));
+        m.material.wireframe = true;
+
+        var vv = g.attributes.tge_a_position.data;
+        var nn = g.attributes.tge_a_normal.data;
+        var x, y, z;
+        var v = vec3();
+        for (var i = 0; i < vv.length; i += 3) {
+            x = vv[i];
+            y = vv[i + 1];
+            z = vv[i + 2];
+            vec3.set(v, x, y, z);
+            vec3.normalize(v, v);
+
+            nn[i] = v[0];
+            nn[i + 1] = v[1];
+            nn[i + 2] = v[2];
+
+            vec3.scale(v, v, 10);
+
+
+
+            vv[i] = v[0];
+            vv[i + 1] = v[1];
+            vv[i + 2] = v[2];
+
+
+
+
+        }
+
+
+
+        return (this);
+
+    }
+
+
+
+    var gg = tge.geometry.cube({ divs: 8, sphereRadius:30});
+    function planet4(data) {
+        _super.apply(this);
+
+
+
+
+
+        var g = tge.geometry.indexed_to_flat(gg);
+        m = this.addMesh(new tge.mesh(g, new tge.phong_material()));
+
+        
+       // m.material.wireframe = true;
+       // m.material.setFlag(tge.SHADING.DOUBLE_SIDES);
+
+        var vv = g.attributes.tge_a_position.data;        
+        var x, y, z;
+        var v = vec3();
+        for (var i = 0; i < vv.length; i += 3) {
+            x = vv[i];
+            y = vv[i + 1];
+            z = vv[i + 2];
+            vec3.set(v, x, y, z);
+            vec3.normalize(v, v);
+            vec3.scale(v, v,130);
+
+            vv[i] = v[0];
+            vv[i + 1] = v[1];
+            vv[i + 2] = v[2];
+
+
+
+
+        }
+
+        tge.geometry.calculate_normals(m.geo, true);
+
+        var lines = tge.geometry.line_geometry_builder;
+        lines.clear();
+
+
+        
+        var normals = m.geo.attributes.tge_a_normal.data;
+        var vertices = m.geo.attributes.tge_a_position.data;
+        for (var i = 0; i < normals.length ; i += 9) {
+            
+            vec3.set(v,
+                (vertices[i + 0] + vertices[i + 3] + vertices[i + 6])/3,
+                (vertices[i + 1] + vertices[i + 4] + vertices[i + 7])/3,
+                (vertices[i + 2] + vertices[i + 5] + vertices[i + 8])/3,
+            );
+            
+           // vec3.set(vv, vertices[i + 0], vertices[i + 1], vertices[i + 2]);
+
+            lines.add(v[0], v[1], v[2]);
+
+            v[0] += normals[i] * 2;
+            v[1] += normals[i + 1] * 2;
+            v[2] += normals[i + 2] * 2;
+
+            lines.add(v[0], v[1], v[2]);
+
+        }
+        /*
+        lines.clear();
+        for (var lat = -90; lat < 90; lat+=1) {
+            for (var lon = -180; lon < 180; lon+=5) {
+                toPoint(v, 50, lat, lon);
+                lines.add(v[0], v[1], v[2]);
+            }
+        }
+        */
+        //tge.material.LinesSelected
+       // m = this.addMesh(new tge.mesh(lines.build(), new tge.phong_material()));
+       // m.material.drawType = GL_LINES;
+
+        function vec(index) {
+            return new Float32Array(vertices.buffer, (index*3) * 4, 3);
+        }
+
+        var verts = [];
+        function pushVertex(v) {
+            verts.push(v[0], v[1], v[2]);
+        }
+
+        function subdivideFace(a, b, c, detail) {
+
+            var cols = Math.pow(2, detail);            
+            var v = [];
+            var i, j;
+            console.log(a);
+            console.log(b);
+            console.log(c);
+            var aj = vec3(), bj = vec3(), cj = vec3();
+            for (i = 0; i <= cols; i++) {
+                v[i] = [];
+
+                vec3.lerp(aj, a, c, i / cols);
+                vec3.lerp(bj, b, c, i / cols);
+
+
+                var rows = cols - i;
+
+                for (j = 0; j <= rows; j++) {
+
+                    if (j === 0 && i === cols) {
+
+                        v[i][j] = [aj[0], aj[1], aj[2]];
+
+                    } else {
+                        vec3.lerp(cj, aj, bj, j / rows);
+
+                        v[i][j] = [cj[0], cj[1], cj[2]];
+
+                    }
+
+                }
+
+            }
+
+
+
+
+            // construct all of the faces
+
+            for (i = 0; i < cols; i++) {
+
+                for (j = 0; j < 2 * (cols - i) - 1; j++) {
+
+                    var k = Math.floor(j / 2);
+
+                    if (j % 2 === 0) {
+
+                        pushVertex(v[i][k + 1]);
+                        pushVertex(v[i + 1][k]);
+                        pushVertex(v[i][k]);
+
+                    } else {
+
+                        pushVertex(v[i][k + 1]);
+                        pushVertex(v[i + 1][k + 1]);
+                        pushVertex(v[i + 1][k]);
+
+                    }
+
+                }
+
+            }
+
+            console.log(verts);
+
+        }
+
+        
+
+
+        subdivideFace(vec(0), vec(1), vec(2), 2);
+        subdivideFace(vec(3), vec(4), vec(5), 2);
+
+        for (var i = 0; i < verts.length; i += 3) {
+            vec3.set(v, verts[i], verts[i + 1], verts[i + 2]);
+            vec3.normalize(v, v);
+            vec3.scale(v, v, 130);
+            verts[i] = v[0];
+            verts[i + 1] = v[1];
+            verts[i + 2] = v[2];
+        }
+
+
+        m = this.addMesh(new tge.mesh(tge.geometry.create(new Float32Array(verts)), new tge.phong_material()));
+         m.material.wireframe = true;
+        m.material.setAmbient(0, 1, 0);
+       // m.material.drawType = GL_POINTS;
+        console.log("mesh", m);
+        return (this);
+
+    }
+
+
+    function planet5(data) {
+        _super.apply(this);
+
+
+        var m;
+
+
+        var v = vec3();
+        
+        var verts = [];
+        function pushVertex(v) {
+            verts.push(v[0], v[1], v[2]);
+        }
+
+        function subdivideFace(a, b, c, detail) {
+
+
+            var cols = Math.pow(2, detail);
+            var v = [];
+            var i, j;            
+            var aj = vec3(), bj = vec3(), cj = vec3();
+            for (i = 0; i <= cols; i++) {
+                v[i] = [];
+
+                vec3.lerp(aj, a, c, i / cols);
+                vec3.lerp(bj, b, c, i / cols);
+
+
+                var rows = cols - i;
+
+                for (j = 0; j <= rows; j++) {
+
+                    if (j === 0 && i === cols) {
+
+                        v[i][j] = [aj[0], aj[1], aj[2]];
+
+                    } else {
+                        vec3.lerp(cj, aj, bj, j / rows);
+
+                        v[i][j] = [cj[0], cj[1], cj[2]];
+
+                    }
+
+                }
+
+            }
+
+
+
+
+            // construct all of the faces
+
+            for (i = 0; i < cols; i++) {
+
+                for (j = 0; j < 2 * (cols - i) - 1; j++) {
+
+                    var k = Math.floor(j / 2);
+
+                    if (j % 2 === 0) {
+
+                        pushVertex(v[i][k + 1]);
+                        pushVertex(v[i + 1][k]);
+                        pushVertex(v[i][k]);
+
+                    } else {
+
+                        pushVertex(v[i][k + 1]);
+                        pushVertex(v[i + 1][k + 1]);
+                        pushVertex(v[i + 1][k]);
+
+                    }
+
+                }
+
+            }
+
+
+        }
+
+
+
+
+        subdivideFace(vec3(-1, 1, 1), vec3(1, 1, 1), vec3(-1, -1,1), 5);
+
+        subdivideFace(vec3(-1, -1, 1), vec3(1, 1, 1), vec3(1, -1, 1), 5);
+
+
+
+
+        for (var i = 0; i < verts.length; i += 3) {
+            vec3.set(v, verts[i], verts[i + 1], verts[i + 2]);
+            vec3.normalize(v, v);
+            vec3.scale(v, v,50);
+            verts[i] = v[0] ;
+            verts[i + 1] = v[1];
+            verts[i + 2] = v[2];
+        }
+
+
+        m = this.addMesh(new tge.mesh(tge.geometry.create(new Float32Array(verts)), new tge.phong_material()));
+        m.material.wireframe = true;
+        //m.material.setAmbient(0, 1, 0);
+        // m.material.drawType = GL_POINTS;
+        console.log("mesh", m);
+
+        this.setPosition(0, 0, -100);
+        return (this);
+
+    }
+
+    var v1 = vec3(), v2 = vec3(), v3 = vec3();
+    var v1v2 = vec3(), v1v3 = vec3(), normal = vec3();
+
+    function planet6(data) {
+        _super.apply(this);
+
+
+
+        var verts = [], triangles = [];
+        var pverts = [];
+
+        var axisA = vec3(), axisB = vec3(),vv=vec3();
+        var xp, yp;
+        var vx, vy, vz;
+        var triIndex = 0, i = 0,rad=30;
+        function addPlane(res, localUp) {
+            res = 3;
+            vec3.set(axisA, localUp[1], localUp[2], localUp[0]);
+            vec3.cross(axisB, localUp, axisA);
+
+
+            for (var y = 0; y < res; y++) {
+                for (var x = 0; x < res; x++) {
+
+                    xp = x / (res - 1);
+                    yp = y / (res - 1);
+
+                    vx = localUp[0] + (xp - 0.5) * 2 * axisA[0] + (yp - 0.5) * 2 * axisB[0];
+                    vy = localUp[1] + (xp - 0.5) * 2 * axisA[1] + (yp - 0.5) * 2 * axisB[1];
+                    vz = localUp[2] + (xp - 0.5) * 2 * axisA[2] + (yp - 0.5) * 2 * axisB[2];
+
+
+                    vec3.set(vv, vx, vy, vz);
+                    vec3.normalize(vv, vv);
+                    vec3.scale(vv, vv, rad);
+
+                    verts.push(vv[0], vv[1], vv[2]);
+
+                   // pverts.push(vv[0], vv[1], vv[2]);
+
+                    i = x + y * res;
+                    i = (verts.length / 3)-1;
+
+                    if (x !== res - 1 && y !== res - 1) {
+                        triangles[triIndex] = i;
+                        triangles[triIndex + 1] = i + res + 1;
+                        triangles[triIndex + 2] = i + res;
+
+
+                        triangles[triIndex + 3] = i;
+                        triangles[triIndex + 4] = i + 1;
+                        triangles[triIndex + 5] = i + res + 1;
+
+                        triIndex += 6;
+                    }
+
+
+                }
+            }
+
+        }
+
+
+      //  addPlane(4, vec3(0, 1, 0));
+      //  addPlane(4, vec3(0, -1, 0));
+      //  addPlane(4, vec3(-1, 0, 0));
+       /// addPlane(4, vec3(1, 0, 0));
+       // addPlane(4, vec3(0, 0, -1));
+        addPlane(8, vec3(0, 0, 1));
+        addPlane(8, vec3(0, 0, -1));
+
+        addPlane(8, vec3(0, 1, 0));
+        addPlane(8, vec3(0, -1, 0));
+
+
+        addPlane(8, vec3(-1, 0, 0));
+        addPlane(8, vec3(1, 0, 0));
+
+        this.faces = [];
+
+        
+        var vi;
+        this.triangles = triangles;
+        this.verts = verts;
+        var cent = vec3(),dist=0;
+        for (var t = 0; t < triangles.length; t += 3) {
+            vi = (triangles[t]) * 3;
+            vec3.set(v1, verts[vi], verts[vi + 1], verts[vi + 2]);
+            vi = (triangles[t+1]) * 3;
+            vec3.set(v2, verts[vi], verts[vi + 1], verts[vi + 2]);
+            vi = (triangles[t+2]) * 3;
+            vec3.set(v3, verts[vi], verts[vi + 1], verts[vi + 2]);
+
+            vec3.subtract(v1v2, v3, v2);
+            vec3.subtract(v1v3, v1, v2);
+
+            vec3.cross(normal, v1v2, v1v3);
+            vec3.normalize(normal, normal);
+
+            vec3.set(cent,
+                (v1[0] + v2[0] + v3[0]) / 3,
+                (v1[1] + v2[1] + v3[1]) / 3,
+                (v1[2] + v2[2] + v3[2]) / 3
+            );
+
+            
+            dist = Math.max(vec3.distance(cent, v1), Math.max(vec3.distance(cent, v2), vec3.distance(cent, v3)));
+            this.faces.push([
+                [normal[0], normal[1], normal[2]],
+                [cent[0], cent[1], cent[2],dist],
+            [v1[0], v1[1], v1[2]],
+            [v2[0], v2[1], v2[2]],
+            [v3[0], v3[1], v3[2]]
+            ]);
+
+           
+//            pverts.push(v2[0], v2[1], v2[2]);
+            //pverts.push(v3[0], v3[1], v3[2]);
+            
+          
+
+            pverts.push(cent[0], cent[1], cent[2]);
+            pverts.push(cent[0] + normal[0] * 3, cent[1] + normal[1] * 3, cent[2] + normal[2] * 3);
+
+
+        }
+
+
+        
+       // g = tge.geometry.indexed_to_flat(g);
+
+       // tge.geometry.calculate_normals(g,true);
+
+        var m = this.addMesh(new tge.mesh(tge.geometry.create(new Float32Array(pverts)), tge.material.LinesSelected));
+
+      
+
+
+        this.pGeo = tge.geometry.indexed_to_flat(tge.geometry.sphere({ size: 10 }));
+
+        this.pGeo.indexData = null;
+
+        m = this.addMesh(new tge.mesh(this.pGeo, new tge.material()));
+        m.material.setAmbient(0, 1, 0);
+        m.material.wireframe = true;
+
+
+        var g = tge.geometry.create(new Float32Array(verts));
+        g.setIndices(triangles);
+         m = this.addMesh(new tge.mesh(g, new tge.phong_material()));
+       m.material.setAmbient(1,1, 1);
+        m.material.wireframe = true;
+        m.material.setTansparency(0.7);
+
+        return (this);
+
+    }
+
+    var t = 0, i = 0, vi, ang, verts = [];
+    var dec = vec3(),cpos=vec3();
+    proto.update_planet = function (camera) {
+
+
+        verts.length = 0;
+        for (i = 0; i < this.faces.length; i++) {
+
+
+            vec3.multiply(cpos, camera.worldPosition, camera.fwVector);
+            vi = this.faces[i][1];
+            vec3.subtract(dec, cpos, vi);
+            vec3.normalize(dec, dec);
+
+           // dec[0] += camera.fwVector[0];
+         //   dec[1] += camera.fwVector[1];
+          //  dec[2] += camera.fwVector[2];
+
+            vec3.normalize(dec, dec);
+
+            vec3.set(v1,
+                this.faces[i][0][0] + camera.fwVector[0],
+                this.faces[i][0][1] + camera.fwVector[1],
+                this.faces[i][0][2] + camera.fwVector[2]
+            )
+            vec3.normalize(v1, v1);
+
+            vec3.copy(v1, this.faces[i][1]);
+            
+            ang = (-vec3.dot(v1, dec)) ;
+
+            ang = 1;
+            if (camera.pointFrustumDistance(vi[0], vi[1], vi[2]) > 0.4) {
+                ang = 0.2;
+            }
+
+            if (ang ===0.2) {
+                vi = this.faces[i][2];
+                verts.push(vi[0], vi[1], vi[2]);
+                vi = this.faces[i][3];
+                verts.push(vi[0], vi[1], vi[2]);
+                vi = this.faces[i][4];
+                verts.push(vi[0], vi[1], vi[2]);
+            }
+            
+
+        }
+
+        //console.log(verts.length);
+        this.pGeo.attributes.tge_a_position.data = new Float32Array(verts);
+        this.pGeo.attributes.tge_a_position.needsUpdate = true;
+        this.pGeo.numItems = verts.length / 3;
+
+    };
+
+
+
+
+    function Tri(a, b, c,parent,level) {
+
+    }
+
+
+    function planet() {
+        _super.apply(this);
+
+        var m = this.addMesh(new tge.mesh(tge.geometry.icosahedron(50), new tge.phong_material()));
+
+        var vertices = $maptypedarray(m.geo.attributes.tge_a_position.data, 3);
+        var traingles = $maptypedarray(m.geo.indexData, 3);
+
+        console.log(vertices, traingles);
+
+       // m.material.wireframe = true;
+        return (this);
+
+    }
+
+    proto.update_planet = function (camera) {
+
+    };
+
+    return planet;
+
+}, tge.model);
+
+
 /*./camera.js*/
 
 
@@ -5641,7 +8228,9 @@ tge.camera = $extend(function (proto, _super) {
 
 
     proto.getDisplay = function () {
-        var mod = new tge.model(tge.geometry.cube());
+        var g = tge.geometry.cube();
+        g.scaleAndPosition(0, 0, 0,0.5, 0.5, 0.5);
+        var mod = new tge.model(g);
         mod.parent = this;
         this.update();
         mod.flags = tge.OBJECT_TYPES.MANIPULATORS;
@@ -5731,6 +8320,46 @@ tge.camera = $extend(function (proto, _super) {
 
 
 tge.perspective_camera = $extend(function (proto, _super) {
+
+
+    proto.getDisplay = (function (proto_getDisplay) {
+        return function () {
+            var mod = proto_getDisplay.apply(this);
+
+
+            var halfHeight = Math.tan( (this.fov / 2.0));
+            var halfWidth = halfHeight * this.aspect;
+            var xn = halfWidth * this.near;
+            var xf = halfWidth * this.far;
+            var yn = halfHeight * this.near;
+            var yf = halfHeight * this.far;
+
+
+            var b = tge.geometry.line_geometry_builder;
+            b.clear();
+            b.add(-xn, -yn, -this.near).add(-xf, -yf, -this.far);
+            b.add(xn, -yn, -this.near).add(xf, -yf, -this.far);
+
+            b.add(-xn, yn, -this.near).add(-xf, yf, -this.far);
+            b.add(xn, yn, -this.near).add(xf, yf, -this.far);
+            
+            b.add(-xf, yf, -this.far).add(xf, yf, -this.far);
+            b.add(-xf, -yf, -this.far).add(xf, -yf, -this.far);
+
+
+            b.add(-xf, -yf, -this.far).add(-xf, yf, -this.far);
+            b.add(xf, -yf, -this.far).add(xf, yf, -this.far);
+            
+                            
+                
+
+            mod.addMesh(new tge.mesh(b.build(), tge.material.LinesSelected));
+
+            return mod;
+        }
+    })(proto.getDisplay);
+
+
 
     function perspective_camera(fov, aspect, near, far) {
         _super.apply(this, arguments);
@@ -5885,7 +8514,7 @@ tge.light = $extend(function (proto, _super) {
         this.range = 2000;
         this.lightType = 0;
         this.shadowBias = 0.000001;
-        this.shadowOpacity = 0.85;
+        this.shadowOpacity = 0.5;
         this.shadowCameraDistance = 20;
         this.shadowFlipFaces = true;
         this.castShadows = false;
@@ -7079,12 +9708,11 @@ tge.engine = $extend(function (proto) {
                 if (att.needsUpdate === true) {
                     if (att.dest === null) {
                         att.dest = gl.createBuffer();
-
                     }
                     gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
-                    gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);
-                   
+                    gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);                   
                     returnValue = 1;
+                    att.version++;
                     att.needsUpdate = false;
                 }
                 else if (att.dest !== null) {
@@ -7819,7 +10447,7 @@ tge.demo = function (parameters, cb) {
 
 
 
-    var camera = new tge.perspective_camera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+    var camera = new tge.perspective_camera(70, window.innerWidth / window.innerHeight, 0.1, 1500);
     console.log(camera);
     app.mouseDrage = function (dx, dy, e) {
         camera.moveLeftRight(-dx * 0.1);

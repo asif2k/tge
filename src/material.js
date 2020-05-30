@@ -130,8 +130,8 @@ tge.material = $extend(function (proto,_super) {
         engine.updateModelUniforms(mesh.model);
         mesh.drawCount = mesh.geo.numItems;
 
-        if (mesh.geo.indexData !== null) {
-            tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+        tge.geometry.activate_index(engine.gl, mesh.geo, this.wireframe);
+        if (mesh.geo.indexData !== null) {            
             if (this.wireframe) {
                 engine.gl.drawElements(GL_LINES, mesh.geo.indexData.length * 2, GL_UNSIGNED_INT, mesh.drawOffset * 2);
             }
@@ -141,7 +141,8 @@ tge.material = $extend(function (proto,_super) {
         }
         else {
             if (this.wireframe) {
-                engine.gl.drawArrays(GL_LINE_LOOP, mesh.drawOffset, mesh.drawCount);
+                //engine.gl.drawArrays(GL_LINES, mesh.drawOffset, mesh.drawCount);
+                engine.gl.drawElements(GL_LINES, mesh.geo.wireframe_index_data.length, GL_UNSIGNED_INT, mesh.drawOffset*2);
             }
             else {
                 engine.gl.drawArrays(this.drawType, mesh.drawOffset, mesh.drawCount);
@@ -195,6 +196,7 @@ tge.material = $extend(function (proto,_super) {
         this.drawType = GL_TRIANGLES;
         this.setShinness(options.shinness || 100);
         this.ambient[3] = 0.1;
+        this.wireframe = false;
         this.noDepthTest = false;
         return (this);
 
@@ -235,7 +237,7 @@ tge.material = $extend(function (proto,_super) {
         tge.material.LinesSelected.setAmbient(1, 1, 1);
 
         tge.material.Points = tge.material.LinesSelected.clone();
-        tge.material.Lines.drawType = GL_POINTS;
+        tge.material.Points.drawType = GL_POINTS;
 
         tge.material.LinesRed = tge.material.Lines.clone();
         tge.material.LinesRed.setAmbient(1, 0, 0);

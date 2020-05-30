@@ -250,12 +250,11 @@ tge.engine = $extend(function (proto) {
                 if (att.needsUpdate === true) {
                     if (att.dest === null) {
                         att.dest = gl.createBuffer();
-
                     }
                     gl.bindBuffer(GL_ARRAY_BUFFER, att.dest);
-                    gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);
-                   
+                    gl.bufferData(GL_ARRAY_BUFFER, att.data, att.bufferType);                   
                     returnValue = 1;
+                    att.version++;
                     att.needsUpdate = false;
                 }
                 else if (att.dest !== null) {

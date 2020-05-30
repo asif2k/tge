@@ -40,6 +40,11 @@ tge.createFloat32 = (function (len, creator) {
     tge.Epsilon = 1.192092896e-012;
     tge.ZeroEpsilonSq = tge.Epsilon * tge.Epsilon;
 
+
+    Math.clamp = Math.clamp || function (v, l, h) {
+        return Math.max(Math.min(v, h), l);
+    };
+
     tge.vec2 = tge.createFloat32(2);
     $assign(tge.vec2, {
         clone: function (a) {
@@ -237,6 +242,29 @@ tge.createFloat32 = (function (len, creator) {
         },
         distance: function (a, b) {
             return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        },
+        scaleAndAdd: function (out, a, b, scale) {
+            out[0] = a[0] + (b[0] * scale);
+            out[1] = a[1] + (b[1] * scale);
+            out[2] = a[2] + (b[2] * scale);
+            return out;
+        },
+        transformMat4: function (out, a, m) {
+            x = a[0]; y = a[1]; z = a[2];
+            out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]);
+            out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]);
+            out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]);
+
+            return out;
+        },
+        lerp: function (out, a, b, l) {
+            out[0] = a[0] + (b[0] - a[0]) * l;
+            out[1] = a[1] + (b[1] - a[1]) * l;
+            out[2] = a[2] + (b[2] - a[2]) * l;
+
+
+
+            return out;
         },
     });
 
